@@ -1,0 +1,55 @@
+# Orquestación de RadioLocal-VHF-HF — Fase 0 (esqueleto MVP).
+# Dos servicios: backend (FastAPI) + frontend (nginx + MapLibre).
+
+services:
+  backend:
+    build: ./backend
+    container_name: radiolocal-backend
+    ports:
+      - "8000:8000"
+    environment:
+      RADIOLOCAL_ENV: "dev"
+    # Variables sensibles (OPENTOPOGRAPHY_API_KEY) se leen de .env si existe.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persistimos la caché de relieve (COGs) fuera del contenedor.
+      - ./data:/app/data
+    healthcheck:
+      # Verifica /health usando el Python ya presente en la imagen.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - radiolocal-net
+
+  frontend:
+    build: ./frontend
+    container_name: radiolocal-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - radiolocal-net
+
+  # --- Servicios de fases futuras (NO habilitados todavía) ---
+  #
+  # worker:            # Fase 2 — motor RF (Signal-Server / Longley-Rice)
+  #   build: ./worker
+  #   networks: [radiolocal-net]
+  #
+  # db:                # Fase 3 — persistencia
+  #   image: postgis/postgis:16-3.4
+  #   networks: [radiolocal-net]
+  #
+  # cache:             # Fase 2/3 — colas de cómputo
+  #   image: redis:7-alpine
+  #   networks: [radiolocal-net]
+
+networks:
+  radiolocal-net:
+    driver: bridge

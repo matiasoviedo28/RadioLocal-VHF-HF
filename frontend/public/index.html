@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RadioLocal-VHF-HF — Cobertura de radio</title>
+
+  <!-- MapLibre GL JS (CDN por ahora; en fase offline se servirá localmente) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Barra superior simple con la identidad del proyecto -->
+  <header id="topbar">
+    <strong>RadioLocal-VHF-HF</strong>
+    <span class="subtitulo">Planificación de cobertura de radio · Argentina</span>
+    <!-- Paso 1 (Plan A, requiere internet): descargar y cachear el relieve visible -->
+    <button id="btn-preparar" type="button">Preparar zona</button>
+    <!-- Toggle de la capa de relieve (hillshade del viewport actual) -->
+    <button id="btn-relieve" type="button">Relieve: OFF</button>
+    <!-- Spinner + texto de estado (errores, progreso) -->
+    <span id="spinner" class="spinner" hidden></span>
+    <span id="estado" class="estado"></span>
+  </header>
+
+  <!-- Contenedor del mapa -->
+  <div id="map"></div>
+
+  <!-- Panel de cobertura RF (visible desde el inicio) -->
+  <div id="panel-cobertura" class="visible">
+    <h3>Cobertura VHF</h3>
+    <p class="ayuda">Click en el mapa para ubicar el transmisor.</p>
+    <p id="aviso-zoom" class="aviso" hidden>Acercá el mapa para calcular cobertura.</p>
+    <!--
+      Cada campo lleva un ícono "i" con tooltip accesible: el texto está en
+      aria-label (lectores de pantalla) y en .tip (visual, hidden para AT). El
+      tooltip se muestra por CSS en :hover y :focus → sirve mouse, teclado y touch.
+    -->
+    <!-- Un campo por línea: etiqueta (con su ícono "i") + input en el mismo renglón. -->
+    <div class="campo">
+      <label>Lat
+        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      </label>
+      <input id="cob-lat" type="number" step="0.00001" />
+    </div>
+    <div class="campo">
+      <label>Lon
+        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      </label>
+      <input id="cob-lon" type="number" step="0.00001" />
+    </div>
+    <div class="campo">
+      <label>Tx h (m)
+        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" aria-hidden="true">Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
+      </label>
+      <input id="cob-txh" type="number" value="10" />
+    </div>
+    <div class="campo">
+      <label>Rx h (m)
+        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
+      </label>
+      <input id="cob-rxh" type="number" value="2" />
+    </div>
+    <div class="campo">
+      <label>ERP (W)
+        <span class="info" tabindex="0" role="img" aria-label="Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25">i<span class="tip" aria-hidden="true">Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25</span></span>
+      </label>
+      <input id="cob-erp" type="number" value="25" />
+    </div>
+    <div class="campo">
+      <label>Frec (MHz)
+        <span class="info" tabindex="0" role="img" aria-label="Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)">i<span class="tip" aria-hidden="true">Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)</span></span>
+      </label>
+      <input id="cob-f" type="number" value="150" />
+    </div>
+    <div class="campo">
+      <label>Radio (km)
+        <span class="info" tabindex="0" role="img" aria-label="Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40">i<span class="tip" aria-hidden="true">Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40</span></span>
+      </label>
+      <input id="cob-radius" type="number" value="40" min="1" max="100" />
+    </div>
+    <div class="campo">
+      <label>Umbral (dBm)
+        <span class="info" tabindex="0" role="img" aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100">i<span class="tip" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100</span></span>
+      </label>
+      <input id="cob-rt" type="number" value="-80" />
+    </div>
+    <div class="campo">
+      <label>Res (px)
+        <span class="info" tabindex="0" role="img" aria-label="Detalle del cálculo en píxeles. Más alto = más detalle y más lento.">i<span class="tip" aria-hidden="true">Detalle del cálculo en píxeles. Más alto = más detalle y más lento.</span></span>
+      </label>
+      <input id="cob-res" type="number" value="1200" />
+    </div>
+    <button id="btn-calcular" type="button">Calcular cobertura</button>
+    <!-- Se habilita tras un cálculo exitoso; guarda la cobertura con un nombre. -->
+    <button id="btn-guardar" type="button" disabled>Guardar cobertura</button>
+
+    <!-- Coberturas guardadas: checkbox para prender/apagar (varias a la vez) + borrar. -->
+    <div id="guardadas">
+      <h4>Coberturas guardadas</h4>
+      <p id="guardadas-vacio" class="ayuda">Todavía no guardaste ninguna.</p>
+      <ul id="lista-guardadas"></ul>
+    </div>
+  </div>
+
+  <!-- Crédito + botón flotante de GitHub (estilo tomado del proyecto FWI) -->
+  <a class="credit" href="https://github.com/matiasoviedo28" target="_blank" rel="noopener">code by: Matías Oviedo</a>
+
+  <div class="gh-fab">
+    <a href="https://github.com/matiasoviedo28/RadioLocal-VHF-HF" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg stroke-linejoin="round" stroke-linecap="round" stroke-width="2" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+      <span class="tip">GitHub</span>
+    </a>
+  </div>
+
+  <!-- Modal para nombrar la cobertura al guardar (reemplaza al prompt nativo) -->
+  <div id="modal-guardar" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <h3 id="modal-titulo">Guardar cobertura</h3>
+      <label for="modal-nombre">Nombre</label>
+      <input id="modal-nombre" type="text" maxlength="80" placeholder="Ej: Repetidora Cerro Otto" />
+      <div class="modal-acciones">
+        <button id="modal-cancelar" type="button">Cancelar</button>
+        <button id="modal-ok" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Dependencias del backend.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+
+# --- Fase 1 (relieve / terreno) ---
+# rasterio trae wheels manylinux con GDAL embebido: NO hace falta GDAL del sistema
+# ni una imagen base pesada. rio-cogeo es Python puro sobre rasterio.
+rasterio==1.4.3
+rio-cogeo==5.4.1
+numpy==2.2.1
+httpx==0.28.1
+
+# --- Fase 2 (motor RF): se sumarán cuando corresponda ---
+# pyproj
+# shapely

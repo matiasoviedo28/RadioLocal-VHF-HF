@@ -1,0 +1,470 @@
+/* Estilos base del frontend de RadioLocal-VHF-HF */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Barra superior */
+#topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: #b71c1c; /* rojo bombero */
+  color: #fff;
+  z-index: 10;
+}
+
+#topbar .subtitulo {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Botones de la barra superior */
+#topbar button {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+#topbar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* "Preparar zona" arranca la fila de acciones a la derecha */
+#btn-preparar {
+  margin-left: auto;
+}
+
+#btn-relieve.activo {
+  background: #fff;
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+#topbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Spinner de actividad */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mensaje de estado (errores, progreso) */
+.estado {
+  font-size: 0.8rem;
+  max-width: 38ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.estado.error {
+  color: #ffd5d5;
+  font-weight: 600;
+}
+
+/* Aviso dentro del panel */
+.aviso {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 4px;
+  color: #664d03;
+}
+
+/* El mapa ocupa toda la pantalla, debajo de la barra */
+#map {
+  position: absolute;
+  top: 48px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+/* Panel de cobertura RF (con scroll si crece la lista de guardadas) */
+#panel-cobertura {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  z-index: 9;
+  width: 250px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  display: none;
+}
+
+#panel-cobertura.visible {
+  display: block;
+}
+
+#panel-cobertura h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: #b71c1c;
+}
+
+#panel-cobertura .ayuda {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+#panel-cobertura .campo {
+  /* Un campo por línea: etiqueta a la izquierda, input a la derecha, sin envolver. */
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#panel-cobertura label {
+  font-size: 0.72rem;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* Ícono "i" de ayuda + tooltip accesible (hover / focus / touch, sin JS) */
+.info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: #b71c1c;
+  color: #fff;
+  font-size: 0.62rem;
+  font-style: italic;
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  cursor: help;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.info:focus {
+  outline: 2px solid #1769aa;
+  outline-offset: 1px;
+}
+
+/* Caja del tooltip: oculta por defecto, visible al hover/focus del ícono.
+   Usa position:fixed y JS (posicionarTip) para mantenerse SIEMPRE dentro de la
+   pantalla, incluso en los íconos pegados a los bordes. */
+.info .tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 210px;
+  padding: 7px 9px;
+  background: #222;
+  color: #fff;
+  font: 400 0.72rem/1.35 system-ui, sans-serif;
+  font-style: normal;
+  /* El label padre tiene white-space:nowrap (para no partir la etiqueta) y
+     white-space SE HEREDA: sin esto, el tooltip no envuelve y se sale de la caja. */
+  white-space: normal;
+  text-align: left;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  /* Oculto pero accesible al foco; se muestra al hover/focus */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.info:hover .tip,
+.info:focus .tip {
+  opacity: 1;
+  visibility: visible;
+}
+
+#panel-cobertura input {
+  /* Ancho dinámico según el contenido (lo fija ajustarAncho en JS), acotado con
+     min/max para que un valor largo nunca desborde el panel: la fila se reacomoda. */
+  width: 5ch;
+  min-width: 3ch;
+  max-width: 12ch;
+  box-sizing: content-box;
+  padding: 3px 4px;
+  font-size: 0.78rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+#btn-calcular {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px;
+  border: none;
+  border-radius: 4px;
+  background: #b71c1c;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#btn-calcular:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Botón secundario "Guardar cobertura" */
+#btn-guardar {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #b71c1c;
+  border-radius: 4px;
+  background: #fff;
+  color: #b71c1c;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#btn-guardar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sección "Coberturas guardadas" */
+#guardadas {
+  margin-top: 12px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 8px;
+}
+
+#guardadas h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #b71c1c;
+}
+
+#lista-guardadas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#lista-guardadas li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+#lista-guardadas .cob-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+#lista-guardadas .cob-nombre {
+  font-weight: 600;
+  color: #333;
+}
+
+#lista-guardadas .cob-params {
+  color: #777;
+  font-size: 0.68rem;
+}
+
+#lista-guardadas .cob-borrar {
+  border: none;
+  background: transparent;
+  color: #b71c1c;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+#lista-guardadas input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: #b71c1c;
+}
+
+/* --------------------------------------------------------------------------
+   Modal para nombrar la cobertura al guardar
+   -------------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 18px 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.modal h3 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: #b71c1c;
+}
+
+.modal label {
+  display: block;
+  font-size: 0.8rem;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.modal input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modal-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-acciones button {
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#modal-cancelar {
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+}
+
+#modal-ok {
+  border: none;
+  background: #b71c1c;
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Crédito "code by" + botón flotante de GitHub (estilo tomado del proyecto FWI,
+   adaptado a la paleta de RadioLocal). El botón se ubica algo elevado para no
+   pisar la atribución del mapa (abajo a la derecha).
+   -------------------------------------------------------------------------- */
+.credit {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  font-size: 12px;
+  color: #000;
+  text-decoration: none;
+  opacity: 0.45;
+  filter: blur(0.3px);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  padding: 3px 12px;
+  border-radius: 12px;
+  transition: 0.25s;
+}
+.credit:hover {
+  opacity: 0.95;
+  filter: none;
+}
+
+.gh-fab {
+  position: fixed;
+  right: 14px;
+  bottom: 40px;
+  z-index: 1200;
+}
+.gh-fab a {
+  display: block;
+  color: #1c1a19;
+}
+.gh-fab svg {
+  width: 34px;
+  height: 34px;
+  transition: 0.2s;
+}
+.gh-fab a:hover svg {
+  transform: scale(1.25);
+  color: #b71c1c;
+}
+.gh-fab .tip {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  transform-origin: bottom;
+  background: #fff;
+  border: 1px solid #e7e0dc;
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: 0.25s ease-in-out;
+  white-space: nowrap;
+}
+.gh-fab a:hover .tip {
+  transform: translateX(-50%) scale(1);
+}
