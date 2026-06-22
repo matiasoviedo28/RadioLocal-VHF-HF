@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/logo.png" alt="Logo de RadioLocal-VHF-HF" width="120" />
+</p>
+
 # Arquitectura — RadioLocal-VHF-HF
 
 Documento vivo. Describe las decisiones de arquitectura, el estado actual de
@@ -35,11 +39,13 @@ empaquetarse y ejecutarse sin internet.
                   │  - GET  /api/terrain/*        │
                   │  - POST /api/coverage         │
                   │      └─ signalserverLIDAR     │  [cómputo RF local]
+                  │  - */export.kmz → Google Earth│
                   └──────────────┬───────────────┘
-                                 │ lee/escribe      ┌─► OpenTopography (GLO-30)
-                                 ▼                  │   [online, on-demand]
-                          data/dem/*.tif (COG) ─────┘
-                          + manifest.json            [caché local / offline]
+                                 │ lee/escribe      ┌─► S3 Copernicus GLO-30
+                                 ▼                  │   [bucket público, sin key]
+                          data/dem/*.tif (COG) ─────┤   (OpenTopography = fallback)
+                          + manifest.json           │
+                          + tileList.txt             [caché local / offline]
 ```
 
 Dos servicios, orquestados por `docker-compose.yml`, en una red compartida
@@ -99,20 +105,75 @@ en `docker-compose.yml` y carpeta `data/`) para sumarlas sin replantear el dise�
 - **A futuro:** mover el binario y `coverage.py` a un **worker** dedicado (con Redis para
   encolar corridas largas), sin cambiar la lógica.
 
+### Exportación a Google Earth — KMZ *(implementado)*
+- **Servicio:** `backend/app/services/kmz.py` — `build_kmz(png, bbox, params, nombre)`
+  arma un **KMZ** (ZIP autocontenido, solo `zipfile` de la stdlib): `doc.kml` +
+  `files/cobertura.png`. El `<GroundOverlay>` referencia el PNG empaquetado y lo
+  ubica con `<LatLonBox>` (north/south/east/west desde el bbox `(O, S, E, N)`,
+  **sin flip**: el PNG es north-up, igual que el overlay del mapa web). Lleva un
+  `<Placemark>` en el Tx con los parámetros y la atribución Copernicus a nivel
+  documento. **No recalcula nada**: reusa el PNG/bbox ya disponibles.
+- **Endpoints:** `POST /api/coverage/export.kmz` (cobertura ACTUAL: reusa el cache
+  en memoria por params vía `coverage.get_cached`, sin recomputar) y
+  `GET /api/coverages/{id}/export.kmz` (cobertura GUARDADA: lee PNG + `meta.json`
+  del disco). Ambos responden con `Content-Disposition` (nombre basado en la
+  cobertura).
+
 ### Relieve — Copernicus GLO-30 *(Fase 1 — implementado)*
-- **Fuente:** OpenTopography, API Global DEM (`demtype=COP30`, GLO-30, 30 m).
-  Requiere API key gratuita (`OPENTOPOGRAPHY_API_KEY` en `.env`).
+- **Fuente (configurable, `settings.dem_source`):**
+  - **`"s3"` (default):** bucket público de Copernicus GLO-30 en AWS
+    (`copernicus-dem-30m`), descarga **anónima** por HTTPS, **sin API key** (httpx,
+    sin SDK). El .tif vive en
+    `{base}/Copernicus_DSM_COG_10_S42_00_W072_00_DEM/<mismo>.tif`.
+  - **`"opentopography"` (fallback opcional):** API Global DEM (`demtype=COP30`),
+    requiere API key gratuita. Reversible y sin romper nada: ambas fuentes sirven
+    el MISMO dato Copernicus GLO-30 → el relieve sale **idéntico** (verificado:
+    array byte a byte igual entre S3 y OpenTopography para un mismo tile).
+- **Autoridad de existencia — `tileList.txt`:** la lista de tiles del bucket se
+  cachea en `data/dem/tileList.txt`. Tile en la lista → se descarga; tile fuera de
+  la lista → es **océano** → se sintetiza un tile plano a nivel del mar (0 m), COG,
+  **sin pegarle a la red**, marcado `ocean:true` en el manifest.
+- **Océano sintético, sin costura:** Copernicus usa **grilla flexible** (las filas
+  siempre 3600; las columnas se reducen hacia los polos: <50° = 3600, 50–60° = 2400,
+  etc.). El tile de océano **clona la grilla** (dimensiones, paso y offset de medio
+  píxel) de los tiles reales de su banda de latitud, así `read_mosaic` no tiene
+  costura en la costa austral. Tabla de bandas verificada contra tiles reales del
+  bucket (S50=3600, S51=2400). El pipeline (`read_mosaic`, `export_ascii_grid`)
+  tolera tiles con menos columnas.
+- **Tiles del bucket ya son COG:** se validan con rio-cogeo y se lee su resolución;
+  **no se reconvierten** (se guardan tal cual).
+- **API key (solo fallback OT):** por **header** `X-OpenTopography-Key` o por `.env`
+  (`OPENTOPOGRAPHY_API_KEY`). Precedencia: header > `.env`. La key no se loguea ni
+  se expone. `GET /api/config/status` devuelve
+  `{requires_api_key, has_api_key}`: con `dem_source="s3"` → `requires_api_key=false`
+  y el frontend nunca pide key.
 - **Servicio:** `backend/app/services/dem.py`. Errores de dominio tipados
-  (`DEMConfigError`, `DEMOfflineError`, `DEMDownloadError`) → códigos HTTP claros
-  (503 / 409 / 502) en `routers/terrain.py`.
+  (`DEMConfigError`, `DEMInvalidKeyError`, `DEMOfflineError`, `DEMDownloadError`)
+  → códigos HTTP claros en `routers/terrain.py`, con `detail` estructurado
+  (`{code, message}`). Los de key (`no_api_key`/`invalid_api_key`) solo aplican al
+  fallback OT.
 - **Caché por tiles 1°×1°** en `data/dem/`, COG validado con rio-cogeo, nombrados
   por esquina SW (`S42W072.tif`). `manifest.json` lista lo cacheado (PostGIS más
-  adelante). El límite de 450.000 km²/request de OpenTopography motiva el troceo.
+  adelante).
 - **Patrón online/offline:** `ensure_dem(bbox)` baja faltantes si hay red; si no,
   `DEMOfflineError` ("zona no preparada para offline"). `read_mosaic`/`hillshade`
   computan **siempre local** sobre los tiles cacheados.
 - **GDAL en Docker:** wheels manylinux de rasterio (GDAL 3.9 embebido) + `libexpat1`.
   Sin imagen base con GDAL del sistema → imagen liviana.
+
+### Descarga masiva por región — pack offline *(herramienta de preparación)*
+- **Módulo CLI** `backend/app/tools/descargar_region.py`, ejecutable con
+  `docker compose exec backend python -m app.tools.descargar_region …`.
+- **Args:** `--bbox SUR OESTE NORTE ESTE`, `--provincia <nombre>` (diccionario de
+  provincias argentinas), `--pais argentina`, `--concurrency N` (default 6).
+- **Comportamiento:** calcula los tiles del bbox (`tiles_for_bbox`), saltea los
+  cacheados (**reanudable**), baja en paralelo con **reintentos** (backoff),
+  reusando la lógica de `dem.py` (S3 + océano sintético). Progreso por consola y
+  resumen final (descargados/océano/salteados/fallidos) + verificación de
+  completitud. Escribe en la misma caché `data/dem/`.
+- **Modelo offline:** una persona arma el pack (provincia ~cientos de MB, país
+  ~15–25 GB) y comparte `data/dem/`; en campo, terreno + cobertura corren 100%
+  offline. Por eso es CLI: no agrega UI ni toca el frontend.
 
 ### Persistencia — PostgreSQL + PostGIS *(Fase 3)*
 - Estaciones, escenarios, resultados de cobertura. Se suma cuando haga falta.
@@ -127,10 +188,11 @@ en `docker-compose.yml` y carpeta `data/`) para sumarlas sin replantear el dise�
 | 2 | Backend Python + FastAPI con stack geoespacial.               |
 | 3 | Frontend MapLibre GL JS (nginx), preparado para PMTiles.      |
 | 4 | Motor RF Signal-Server en un worker.                          |
-| 5 | Relieve Copernicus GLO-30 on-demand, cacheado como COG.       |
+| 5 | Relieve Copernicus GLO-30 on-demand, cacheado como COG. Fuente por defecto: bucket público S3 (sin API key); OpenTopography como fallback opcional. Océano sintético para tiles fuera del bucket. CLI de descarga por región para packs offline. |
 | 6 | Datos híbridos; cómputo de propagación siempre local.         |
 | 7 | PostgreSQL + PostGIS solo cuando se necesite persistencia.    |
 | 8 | Motor RF (Fase 2): fork W3AXL/Signal-Server, binario LIDAR (`-lid`), commit fijado, build multi-stage. |
 | 9 | Cobertura síncrona en el backend por ahora; `coverage.py` aislado para mover a worker. |
+| 10 | Exportación a Google Earth como KMZ autocontenido (`zipfile`, sin libs extra), reusando el PNG/bbox ya calculado (sin recomputar). |
 
 El roadmap por fases está en [../CLAUDE.md](../CLAUDE.md).

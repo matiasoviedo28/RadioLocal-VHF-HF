@@ -27,13 +27,23 @@ html, body {
   z-index: 10;
 }
 
+/* Logo del proyecto: alto fijo para encajar en la barra sin deformarse */
+#topbar-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+}
+
 #topbar .subtitulo {
   font-size: 0.9rem;
   opacity: 0.9;
 }
 
-/* Botones de la barra superior */
+/* Botones de la barra superior: ícono + texto alineados en una fila */
 #topbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 4px;
@@ -47,15 +57,38 @@ html, body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* "Preparar zona" arranca la fila de acciones a la derecha */
-#btn-preparar {
+/* Ícono SVG dentro de los botones: hereda el color del texto (cambia con .activo) */
+#topbar button .ico {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* El primer botón de acciones arranca la fila pegada a la derecha */
+#btn-relieve {
   margin-left: auto;
 }
 
-#btn-relieve.activo {
+#btn-relieve.activo,
+#btn-offline.activo {
   background: #fff;
   color: #b71c1c;
   font-weight: 600;
+}
+
+/* Botón "?" de ayuda: compacto y redondo, mismo estilo blanco/rojo de la barra */
+#topbar button.btn-icono {
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
 }
 
 #topbar button:disabled {
@@ -268,6 +301,24 @@ html, body {
   cursor: not-allowed;
 }
 
+/* Botón secundario "Exportar a Google Earth" (mismo look que Guardar) */
+#btn-exportar-kml {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #b71c1c;
+  border-radius: 4px;
+  background: #fff;
+  color: #b71c1c;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#btn-exportar-kml:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Sección "Coberturas guardadas" */
 #guardadas {
   margin-top: 12px;
@@ -313,7 +364,8 @@ html, body {
   font-size: 0.68rem;
 }
 
-#lista-guardadas .cob-borrar {
+#lista-guardadas .cob-borrar,
+#lista-guardadas .cob-exportar {
   border: none;
   background: transparent;
   color: #b71c1c;
@@ -404,6 +456,62 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
+   Modal de API key de OpenTopography (UX de carga de la clave). Reusa el
+   .modal-overlay/.modal de arriba; acá van solo los extras: texto, links e
+   input con botón de mostrar/ocultar.
+   -------------------------------------------------------------------------- */
+.modal-texto {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: #333;
+  line-height: 1.4;
+}
+/* Se pinta de rojo cuando el mensaje es de error (key faltante/ inválida). */
+.modal-texto.error {
+  color: #b71c1c;
+}
+.modal-links {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+}
+.modal-links a {
+  color: #b71c1c;
+  font-weight: 600;
+}
+/* Input + botón "ver" en la misma fila. */
+.apikey-fila {
+  display: flex;
+  gap: 6px;
+}
+.apikey-fila input {
+  flex: 1;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+#apikey-ver {
+  flex: 0 0 auto;
+  width: 38px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+#apikey-cancelar {
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+}
+#apikey-ok {
+  border: none;
+  background: #b71c1c;
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
    Crédito "code by" + botón flotante de GitHub (estilo tomado del proyecto FWI,
    adaptado a la paleta de RadioLocal). El botón se ubica algo elevado para no
    pisar la atribución del mapa (abajo a la derecha).
@@ -467,4 +575,305 @@ html, body {
 }
 .gh-fab a:hover .tip {
   transform: translateX(-50%) scale(1);
+}
+
+/* --------------------------------------------------------------------------
+   Panel "Descargar zona / Offline" (ADITIVO). Espejo visual del panel de
+   cobertura, ubicado en una SEGUNDA COLUMNA a la derecha de aquel para no
+   pisarlo. Oculto por defecto: se muestra con .visible (botón "Offline").
+   -------------------------------------------------------------------------- */
+#panel-offline {
+  position: absolute;
+  top: 60px;
+  left: 274px; /* 12 (margen) + 250 (panel cobertura) + 12 (separación) */
+  z-index: 9;
+  width: 250px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  display: none;
+}
+
+#panel-offline.visible {
+  display: block;
+}
+
+#panel-offline h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: #b71c1c;
+}
+
+#panel-offline .ayuda {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.off-bloque {
+  margin-bottom: 10px;
+}
+
+.off-label {
+  display: block;
+  font-size: 0.72rem;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+#off-provincia {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* Botones del panel offline: rojo lleno (acción primaria) y borde (secundaria) */
+#panel-offline button {
+  width: 100%;
+  padding: 7px;
+  border: none;
+  border-radius: 4px;
+  background: #b71c1c;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+/* Acción principal del panel: "Descargar la vista actual" (rojo lleno, destacada).
+   Es lo que hacía el viejo "Preparar zona". */
+.off-primario {
+  padding: 9px;
+  font-size: 0.86rem;
+  box-shadow: 0 1px 3px rgba(183, 28, 28, 0.35);
+}
+
+/* "Descargar provincia" queda como acción secundaria (borde, sin relleno) */
+#off-descargar-prov {
+  border: 1px solid #b71c1c;
+  background: #fff;
+  color: #b71c1c;
+}
+
+#panel-offline button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Barra de progreso */
+.off-barra {
+  width: 100%;
+  height: 10px;
+  background: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+#off-barra-fill {
+  height: 100%;
+  width: 0%;
+  background: #2e7d32; /* verde: avance */
+  transition: width 0.3s ease;
+}
+
+.off-mini {
+  margin: 4px 0;
+  font-size: 0.72rem;
+  color: #555;
+}
+
+#off-reintentar {
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid #b71c1c;
+  color: #b71c1c;
+}
+
+/* Sección de visibilidad de la caché */
+.off-seccion {
+  margin-top: 12px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 8px;
+}
+
+#panel-offline h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #b71c1c;
+}
+
+.off-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #333;
+  margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.off-check input[type="checkbox"] {
+  accent-color: #b71c1c;
+  cursor: pointer;
+}
+
+/* Leyenda chica con los swatches del overlay */
+.off-leyenda {
+  display: flex;
+  gap: 12px;
+  margin: 6px 0;
+  font-size: 0.72rem;
+  color: #444;
+}
+
+.off-leyenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.off-sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Tierra: verde tenve con borde marcado (legible sobre positron) */
+.off-sw.tierra {
+  background: rgba(46, 125, 50, 0.35);
+  border: 1.5px solid #2e7d32;
+}
+
+/* Océano: muy de-enfatizado (gris-azulado tenue) */
+.off-sw.oceano {
+  background: rgba(120, 144, 156, 0.25);
+  border: 1px solid #90a4ae;
+}
+
+/* --------------------------------------------------------------------------
+   Popup "relieve sin datos": reusa .modal-overlay / .modal. Solo definimos los
+   colores de sus dos botones (secundario blanco + primario rojo), igual que los
+   demás diálogos.
+   -------------------------------------------------------------------------- */
+#relieve-cerrar {
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+}
+#relieve-descargar {
+  border: none;
+  background: #b71c1c;
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   TOUR GUIADO DE PRIMER INGRESO
+   #tour-overlay capta los clics (bloquea la app mientras dura la guía).
+   #tour-spot es el "agujero": su box-shadow gigante oscurece todo menos el
+   elemento resaltado. #tour-cartel es la tarjeta con el texto del paso.
+   -------------------------------------------------------------------------- */
+#tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+}
+#tour-overlay[hidden] {
+  display: none;
+}
+
+/* El agujero del spotlight: sin relleno propio; el box-shadow hace la oscuridad.
+   Cuando no hay elemento a resaltar, el cartel se centra y este spot se oculta;
+   en ese caso el propio overlay se encarga del fondo (ver .centrado abajo). */
+#tour-spot {
+  position: fixed;
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+#tour-spot[hidden] {
+  display: none;
+}
+/* Sin spotlight (pasos de bienvenida/cierre): el overlay oscurece todo.
+   La clase la pone/saca app.js (más robusto que depender de :has()). */
+#tour-overlay.sin-spot {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* Tarjeta del paso: mismo look que los modales (blanco, sombra, acento rojo). */
+#tour-cartel {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 16px 18px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+/* Pasos sin target: cartel centrado en la pantalla. */
+#tour-cartel.centrado {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tour-paso {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #b71c1c;
+}
+.tour-texto {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #333;
+}
+
+/* Fila de acciones: "Omitir" a la izquierda, navegación a la derecha. */
+#tour-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tour-nav {
+  display: flex;
+  gap: 8px;
+}
+#tour-acciones button {
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+/* "Anterior": secundario (borde). "Siguiente/Finalizar": primario (rojo). */
+#tour-anterior {
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+}
+#tour-siguiente {
+  border: none;
+  background: #b71c1c;
+  color: #fff;
+}
+/* "Omitir tutorial": link discreto, sin caja. */
+.tour-link {
+  border: none;
+  background: transparent;
+  color: #777;
+  text-decoration: underline;
 }

@@ -293,3 +293,17 @@ def get_or_run(p: CoverageParams) -> CoverageResult:
         _CACHE.move_to_end(_firma(p))
         return cached
     return run_coverage(p)
+
+
+def get_cached(p: CoverageParams) -> CoverageResult | None:
+    """Devuelve el resultado cacheado para esos params, o None. NUNCA recalcula.
+
+    Lo usa la exportación a KMZ de la cobertura ACTUAL: reusa el PNG/bbox recién
+    calculado (el cómputo siempre cachea su resultado en `_guardar_en_cache`). Si
+    el usuario exporta justo después de calcular, está garantizado el hit; si fue
+    desalojado del LRU (raro), el endpoint pide volver a calcular.
+    """
+    cached = _CACHE.get(_firma(p))
+    if cached is not None:
+        _CACHE.move_to_end(_firma(p))
+    return cached

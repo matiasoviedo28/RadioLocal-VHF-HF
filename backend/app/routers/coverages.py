@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from app.services import coverage, coverage_store, dem
+from app.services import coverage, coverage_store, dem, kmz
 
 router = APIRouter(prefix="/api/coverages", tags=["coberturas"])
 
@@ -94,6 +94,30 @@ def overlay(cid: str) -> Response:
         headers["X-Bbox"] = ",".join(str(x) for x in meta["bbox"])
     return FileResponse(
         coverage_store.overlay_path(cid), media_type="image/png", headers=headers
+    )
+
+
+@router.get("/{cid}/export.kmz")
+def export_kmz(cid: str) -> Response:
+    """Exporta una cobertura guardada a un KMZ, SIN recomputar: lee el PNG + meta
+    (bbox, params, nombre) ya persistidos en disco y los empaqueta."""
+    if not coverage_store.existe(cid):
+        raise HTTPException(status_code=404, detail="Cobertura no encontrada.")
+
+    meta = next((m for m in coverage_store.listar() if m["id"] == cid), None)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Cobertura no encontrada.")
+
+    png_bytes = coverage_store.overlay_path(cid).read_bytes()
+    bbox = tuple(meta["bbox"])  # (oeste, sur, este, norte)
+    nombre = meta.get("nombre") or "Cobertura"
+
+    kmz_bytes = kmz.build_kmz(png_bytes, bbox, meta.get("params", {}), nombre)
+
+    return Response(
+        content=kmz_bytes,
+        media_type="application/vnd.google-earth.kmz",
+        headers={"Content-Disposition": kmz.content_disposition(nombre)},
     )
 
 

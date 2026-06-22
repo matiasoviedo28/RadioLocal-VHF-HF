@@ -8,7 +8,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import coverage, coverages, health, terrain, version
+from app.routers import (
+    config,
+    coverage,
+    coverages,
+    health,
+    regions,
+    terrain,
+    version,
+)
 
 # Aplicación FastAPI con metadatos tomados de la configuración.
 app = FastAPI(
@@ -30,8 +38,14 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(version.router)
 
+# Estado de configuración (UX de la API key de relieve).
+app.include_router(config.router)
+
 # Fase 1: relieve / terreno.
 app.include_router(terrain.router)
+
+# Regiones disponibles para descarga masiva (provincias argentinas).
+app.include_router(regions.router)
 
 # Fase 2: motor RF (cobertura VHF).
 app.include_router(coverage.router)

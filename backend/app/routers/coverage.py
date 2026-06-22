@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from app.services import coverage, dem
+from app.services import coverage, dem, kmz
 
 router = APIRouter(prefix="/api", tags=["cobertura"])
 
@@ -71,4 +71,50 @@ def coverage_endpoint(req: CoverageRequest) -> Response:
         content=result.png,
         media_type="image/png",
         headers={"X-Bbox": f"{west},{south},{east},{north}"},
+    )
+
+
+class ExportKmzRequest(BaseModel):
+    """Cuerpo de POST /coverage/export.kmz: params de la cobertura + nombre opcional.
+
+    Identificamos el PNG de la cobertura ACTUAL por sus parámetros: son la misma
+    clave con que el cómputo ya la dejó en el cache en memoria. Así NO se recalcula
+    nada (ver coverage.get_cached).
+    """
+
+    nombre: str = Field("Cobertura", min_length=1, max_length=120)
+    params: CoverageRequest
+
+
+@router.post("/coverage/export.kmz")
+def export_kmz(req: ExportKmzRequest) -> Response:
+    """Exporta la cobertura ACTUAL (recién calculada) a un KMZ, SIN recomputar.
+
+    Reusa el PNG/bbox del cache en memoria (clave = params). Si esos params ya no
+    están cacheados (desalojo del LRU), devuelve 409 pidiendo recalcular.
+    """
+    p = req.params
+    params = coverage.CoverageParams(
+        lat=p.lat, lon=p.lon, txh=p.txh, erp=p.erp, f=p.f,
+        radius_km=p.radius, rxh=p.rxh, rt=p.rt, res=p.res,
+    )
+
+    result = coverage.get_cached(params)
+    if result is None:
+        raise HTTPException(
+            status_code=409,
+            detail="La cobertura ya no está en memoria; volvé a calcularla para exportar.",
+        )
+
+    # dict con las mismas claves que usa el frontend / las coberturas guardadas.
+    params_dict = {
+        "lat": p.lat, "lon": p.lon, "txh": p.txh, "erp": p.erp, "f": p.f,
+        "radius": p.radius, "rxh": p.rxh, "rt": p.rt, "res": p.res,
+    }
+    kmz_bytes = kmz.build_kmz(result.png, result.bbox, params_dict, req.nombre)
+
+    return Response(
+        content=kmz_bytes,
+        media_type="application/vnd.google-earth.kmz",
+        headers={"Content-Disposition": kmz.content_disposition(req.nombre)},
     )

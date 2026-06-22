@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Identidad de la aplicación
     app_name: str = "RadioLocal-VHF-HF"
-    app_version: str = "0.5.1"  # Recalibración del techo síncrono (~100 km, timeout 280s)
+    app_version: str = "1.1.0"  # 1.1.0: exportación de coberturas a Google Earth (KMZ)
 
     # Entorno de ejecución: "dev" | "prod"
     env: str = "dev"
@@ -29,7 +29,21 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
 
     # --- Fase 1: relieve / terreno ---
-    # API key de OpenTopography (gratuita). NUNCA se commitea: va en .env.
+    # Fuente del DEM:
+    #   "s3"            -> bucket público AWS de Copernicus GLO-30 (default, SIN API key).
+    #   "opentopography"-> fallback opcional vía OpenTopography (requiere API key).
+    # El cambio es reversible: ambos sirven el MISMO dato (Copernicus GLO-30, 30 m),
+    # así que el relieve/cobertura salen idénticos cualquiera sea la fuente.
+    dem_source: str = "s3"
+
+    # Bucket público de Copernicus GLO-30 en el AWS Open Data registry (descarga
+    # anónima por HTTPS, sin credenciales). Los tiles ya son COG.
+    #   tile: {base}/Copernicus_DSM_COG_10_S42_00_W072_00_DEM/<mismo>.tif
+    #   lista de tiles existentes (autoridad de "qué hay"): {base}/tileList.txt
+    copernicus_s3_base: str = "https://copernicus-dem-30m.s3.amazonaws.com"
+
+    # API key de OpenTopography (gratuita). OPCIONAL: solo se usa si
+    # dem_source="opentopography". NUNCA se commitea: va en .env.
     # Alias explícito: se lee de OPENTOPOGRAPHY_API_KEY (sin prefijo RADIOLOCAL_).
     opentopography_api_key: str = Field(default="", alias="OPENTOPOGRAPHY_API_KEY")
     opentopography_url: str = "https://portal.opentopography.org/API/globaldem"

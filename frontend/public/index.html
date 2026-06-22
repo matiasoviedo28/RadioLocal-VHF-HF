@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RadioLocal-VHF-HF — Cobertura de radio</title>
 
+  <!-- Ícono de la pestaña (favicon). El .ico es el clásico; el .png como respaldo. -->
+  <link rel="icon" type="image/x-icon" href="logo.ico" />
+  <link rel="icon" type="image/png" href="logo.png" />
+
   <!-- MapLibre GL JS (CDN por ahora; en fase offline se servirá localmente) -->
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -14,12 +18,32 @@
 <body>
   <!-- Barra superior simple con la identidad del proyecto -->
   <header id="topbar">
+    <!-- Logo del proyecto (se sirve desde la raíz del sitio: frontend/public/logo.png) -->
+    <img id="topbar-logo" src="logo.png" alt="Logo de RadioLocal-VHF-HF" />
     <strong>RadioLocal-VHF-HF</strong>
     <span class="subtitulo">Planificación de cobertura de radio · Argentina</span>
-    <!-- Paso 1 (Plan A, requiere internet): descargar y cachear el relieve visible -->
-    <button id="btn-preparar" type="button">Preparar zona</button>
-    <!-- Toggle de la capa de relieve (hillshade del viewport actual) -->
-    <button id="btn-relieve" type="button">Relieve: OFF</button>
+    <!--
+      Toggle de la capa de relieve (hillshade del viewport actual). El estado
+      (prendido/apagado) se muestra con la clase .activo (relleno), no con texto.
+      El title alterna "Mostrar relieve" / "Ocultar relieve" según el estado.
+    -->
+    <button id="btn-relieve" type="button" title="Mostrar relieve">
+      <!-- Ícono de montaña/relieve -->
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18L14 8l-3.5 5.5L8 10z" /></svg>
+      <span>Relieve</span>
+    </button>
+    <!--
+      Abre/cierra el panel de descargas (oculto por defecto). Unifica el viejo
+      "Preparar zona" + "Offline": baja el terreno de un área para la cobertura.
+    -->
+    <button id="btn-offline" type="button"
+            title="Descargá el terreno de un área para calcular cobertura, también sin internet.">
+      <!-- Ícono de descarga (flecha hacia abajo) -->
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
+      <span>Descargar zona</span>
+    </button>
+    <!-- Reabre la guía paso a paso (tour) cuando el usuario quiera -->
+    <button id="btn-ayuda" type="button" class="btn-icono" title="Abrir la guía paso a paso">?</button>
     <!-- Spinner + texto de estado (errores, progreso) -->
     <span id="spinner" class="spinner" hidden></span>
     <span id="estado" class="estado"></span>
@@ -96,12 +120,68 @@
     <button id="btn-calcular" type="button">Calcular cobertura</button>
     <!-- Se habilita tras un cálculo exitoso; guarda la cobertura con un nombre. -->
     <button id="btn-guardar" type="button" disabled>Guardar cobertura</button>
+    <!-- Exporta la cobertura actual a un KMZ (Google Earth). Mismo gate que Guardar. -->
+    <button id="btn-exportar-kml" type="button" disabled>Exportar a Google Earth</button>
 
     <!-- Coberturas guardadas: checkbox para prender/apagar (varias a la vez) + borrar. -->
     <div id="guardadas">
       <h4>Coberturas guardadas</h4>
       <p id="guardadas-vacio" class="ayuda">Todavía no guardaste ninguna.</p>
       <ul id="lista-guardadas"></ul>
+    </div>
+  </div>
+
+  <!--
+    Panel "Descargar zona / Offline" (ADITIVO, oculto por defecto). Toda la
+    gestión de descargas y la visibilidad de la caché vive acá; no toca el mapa
+    ni el panel de cobertura. Se abre con el botón "Offline" del topbar.
+  -->
+  <div id="panel-offline">
+    <h3>Descargar zona</h3>
+    <p class="ayuda">
+      Descargá el relieve de la vista actual o de una provincia para usar el mapa
+      y el cálculo sin internet.
+    </p>
+
+    <!--
+      Acción principal: descargar la vista actual (es lo que hacía "Preparar zona").
+      Va arriba y destacada como botón primario para no perder ese flujo rápido.
+    -->
+    <div class="off-bloque">
+      <button id="off-descargar-vista" type="button" class="off-primario">Descargar la vista actual</button>
+    </div>
+
+    <!-- Descargar provincia (acción secundaria) -->
+    <div class="off-bloque">
+      <label class="off-label" for="off-provincia">Provincia</label>
+      <select id="off-provincia"></select>
+      <button id="off-descargar-prov" type="button">Descargar provincia</button>
+    </div>
+
+    <!-- Barra de progreso (visible solo mientras corre una descarga) -->
+    <div id="off-progreso" hidden>
+      <div class="off-barra"><div id="off-barra-fill"></div></div>
+      <p id="off-progreso-txt" class="off-mini"></p>
+      <button id="off-reintentar" type="button" hidden>Reintentar faltantes</button>
+    </div>
+
+    <!-- Visibilidad de la caché -->
+    <div id="guardadas" class="off-seccion">
+      <h4>Zonas disponibles offline</h4>
+      <label class="off-check">
+        <!-- Tildado por defecto: al abrir el panel se muestran las zonas en el mapa -->
+        <input id="off-toggle-cache" type="checkbox" checked />
+        Mostrar en el mapa
+      </label>
+      <label class="off-check">
+        <input id="off-toggle-oceano" type="checkbox" />
+        Incluir océano
+      </label>
+      <div id="off-leyenda" class="off-leyenda" hidden>
+        <span><i class="off-sw tierra"></i> Tierra</span>
+        <span><i class="off-sw oceano"></i> Océano</span>
+      </div>
+      <p id="off-resumen" class="off-mini"></p>
     </div>
   </div>
 
@@ -115,6 +195,37 @@
     </a>
   </div>
 
+  <!--
+    Modal de API key de OpenTopography. Se muestra cuando NO hay key usable (ni
+    cargada en el navegador ni en el .env del servidor), o cuando el backend
+    avisa que la key falta / es inválida. La key vive solo en localStorage del
+    navegador (cada usuario la suya) y viaja por header en cada descarga.
+  -->
+  <div id="modal-apikey" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="apikey-titulo">
+      <h3 id="apikey-titulo">API key de OpenTopography</h3>
+      <p id="apikey-mensaje" class="modal-texto">
+        No tenés una API key de OpenTopography configurada. Si no tenés una, creala gratis.
+      </p>
+      <p class="modal-links">
+        <a href="https://portal.opentopography.org/newUser" target="_blank" rel="noopener">Crear cuenta gratis</a>
+        ·
+        <a href="https://github.com/matiasoviedo28/RadioLocal-VHF-HF/blob/main/OpenTopography.md" target="_blank" rel="noopener">Guía paso a paso</a>
+      </p>
+      <label for="apikey-input">Pegá tu API key</label>
+      <!-- Input enmascarado + botón para mostrar/ocultar la clave. -->
+      <div class="apikey-fila">
+        <input id="apikey-input" type="password" autocomplete="off" spellcheck="false"
+               placeholder="Tu clave de OpenTopography" />
+        <button id="apikey-ver" type="button" aria-label="Mostrar u ocultar la clave" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div class="modal-acciones">
+        <button id="apikey-cancelar" type="button">Cerrar</button>
+        <button id="apikey-ok" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal para nombrar la cobertura al guardar (reemplaza al prompt nativo) -->
   <div id="modal-guardar" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
@@ -124,6 +235,44 @@
       <div class="modal-acciones">
         <button id="modal-cancelar" type="button">Cancelar</button>
         <button id="modal-ok" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Popup amable cuando se activa "Relieve" sobre una zona sin terreno descargado.
+    Reusa el .modal-overlay / .modal de los demás diálogos para mantener el look.
+  -->
+  <div id="modal-relieve" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="relieve-titulo">
+      <h3 id="relieve-titulo">Relieve no disponible</h3>
+      <p class="modal-texto">Primero descargá la zona para ver el relieve.</p>
+      <div class="modal-acciones">
+        <button id="relieve-cerrar" type="button">Cerrar</button>
+        <button id="relieve-descargar" type="button">Descargar zona</button>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Tour guiado de primer ingreso (custom, sin CDN). Se compone de:
+      - #tour-overlay: capa que bloquea la interacción mientras dura la guía.
+      - #tour-spot: "agujero" del spotlight; con un box-shadow enorme oscurece
+        todo MENOS el elemento resaltado (se posiciona por JS).
+      - #tour-cartel: tarjeta con el texto del paso, contador y navegación.
+    Todo el contenido (textos/pasos) lo arma app.js.
+  -->
+  <div id="tour-overlay" hidden>
+    <div id="tour-spot"></div>
+    <div id="tour-cartel" role="dialog" aria-modal="true" aria-labelledby="tour-texto">
+      <p id="tour-paso" class="tour-paso"></p>
+      <p id="tour-texto" class="tour-texto"></p>
+      <div id="tour-acciones">
+        <button id="tour-omitir" type="button" class="tour-link">Omitir tutorial</button>
+        <span class="tour-nav">
+          <button id="tour-anterior" type="button">Anterior</button>
+          <button id="tour-siguiente" type="button">Siguiente</button>
+        </span>
       </div>
     </div>
   </div>

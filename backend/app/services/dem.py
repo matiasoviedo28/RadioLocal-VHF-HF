@@ -6,8 +6,16 @@ Esquema de caché:
 - Cada tile se guarda como COG (Cloud-Optimized GeoTIFF), validado con rio-cogeo.
 - Un manifest JSON (`data/dem/manifest.json`) lista los tiles cacheados.
 
+Fuente de datos (settings.dem_source):
+- "s3" (default): bucket público AWS de Copernicus GLO-30 ("copernicus-dem-30m"),
+  descarga anónima por HTTPS, SIN API key. La autoridad de "qué tiles existen" es
+  `tileList.txt` del bucket (cacheado): un tile fuera de la lista es océano y se
+  sintetiza plano (0 m) con el MISMO grid que los tiles reales de su banda.
+- "opentopography": fallback opcional, requiere API key (header > .env).
+Ambas fuentes sirven el MISMO dato (Copernicus GLO-30, 30 m): el relieve sale idéntico.
+
 Patrón "datos híbridos":
-- Si hay internet, los tiles faltantes se bajan de OpenTopography (Copernicus GLO-30).
+- Si hay internet, los tiles faltantes se bajan de la fuente activa.
 - Si NO hay internet, se levanta un error claro: la zona no está preparada para offline.
 
 El CÓMPUTO (hillshade, y a futuro la propagación RF) corre SIEMPRE local sobre
@@ -27,6 +35,7 @@ import httpx
 import numpy as np
 import rasterio
 import rasterio.shutil
+from affine import Affine
 from rasterio.io import MemoryFile
 from rasterio.merge import merge
 from rasterio.transform import array_bounds
@@ -48,6 +57,10 @@ class DEMError(Exception):
 
 class DEMConfigError(DEMError):
     """Falta configuración necesaria (p. ej. la API key)."""
+
+
+class DEMInvalidKeyError(DEMError):
+    """OpenTopography rechazó la API key (401/403): inválida o sin permisos."""
 
 
 class DEMOfflineError(DEMError):
@@ -139,14 +152,20 @@ def save_manifest(manifest: dict) -> None:
     )
 
 
-def _register_tile(tid: str, resolution_m: float, valid_cog: bool) -> None:
-    """Agrega/actualiza un tile en el manifest."""
+def _register_tile(
+    tid: str, resolution_m: float, valid_cog: bool, ocean: bool = False
+) -> None:
+    """Agrega/actualiza un tile en el manifest.
+
+    `ocean=True` marca un tile sintético a nivel del mar (no estaba en el bucket).
+    """
     manifest = load_manifest()
     manifest["tiles"][tid] = {
         "bounds": tile_bounds(tid),
         "demtype": settings.dem_demtype,
         "resolution_m": resolution_m,
         "valid_cog": valid_cog,
+        "ocean": ocean,
         "downloaded_at": datetime.now(timezone.utc).isoformat(),
     }
     save_manifest(manifest)
@@ -160,13 +179,20 @@ def is_cached(tid: str) -> bool:
 # --------------------------------------------------------------------------- #
 # Conectividad
 # --------------------------------------------------------------------------- #
+def _active_host() -> str:
+    """Host de la fuente de DEM activa (bucket S3 o portal OpenTopography)."""
+    if settings.dem_source == "opentopography":
+        return httpx.URL(settings.opentopography_url).host
+    return httpx.URL(settings.copernicus_s3_base).host
+
+
 def is_online(timeout: float = 3.0) -> bool:
-    """Chequeo rápido de conectividad contra el host de OpenTopography.
+    """Chequeo rápido de conectividad contra el host de la fuente de DEM activa.
 
     Intencionalmente no usamos un tercero (p. ej. Google): si el host de la
     fuente de datos no responde, a efectos prácticos estamos "offline".
     """
-    host = httpx.URL(settings.opentopography_url).host
+    host = _active_host()
     try:
         with socket.create_connection((host, 443), timeout=timeout):
             return True
@@ -204,15 +230,206 @@ def _save_as_cog(src_bytes: bytes, dest: Path) -> tuple[bool, float]:
     return is_valid, resolution_m
 
 
-def download_tile(tid: str) -> None:
-    """Baja un tile de OpenTopography y lo guarda como COG.
+# --------------------------------------------------------------------------- #
+# Camino S3: bucket público de Copernicus GLO-30 (default, sin API key)
+# --------------------------------------------------------------------------- #
+def _copernicus_name(tid: str) -> str:
+    """Nombre del tile en el bucket Copernicus a partir de nuestro id de esquina SW.
 
-    Lanza DEMConfigError si falta la API key, o DEMDownloadError ante fallos de red.
+    Ej.: "S42W072" -> "Copernicus_DSM_COG_10_S42_00_W072_00_DEM"
+    (código de resolución 10 = GLO-30; "_00" = decimales de la esquina, siempre 00).
+    El .tif vive en `{base}/{name}/{name}.tif`.
     """
-    if not settings.opentopography_api_key:
+    lat_sw, lon_sw = parse_tile_id(tid)
+    ns = "S" if lat_sw < 0 else "N"
+    ew = "W" if lon_sw < 0 else "E"
+    return f"Copernicus_DSM_COG_10_{ns}{abs(lat_sw):02d}_00_{ew}{abs(lon_sw):03d}_00_DEM"
+
+
+def _band_width(lat_sw: int) -> int:
+    """Columnas de un tile GLO-30 según la banda de latitud.
+
+    Copernicus usa grilla flexible: las FILAS siempre son 3600 (1" en latitud),
+    pero las COLUMNAS se reducen hacia los polos para mantener ~30 m de paso real.
+    La banda la determina el borde de la tile MÁS CERCANO AL ECUADOR.
+
+    Verificado contra tiles reales del bucket: S50=3600 cols, S51=2400 cols (el
+    quiebre cae en 50°), y S42=3600, S53=2400 (dimensiones y transform exactos).
+    """
+    band_lat = min(abs(lat_sw), abs(lat_sw + 1))
+    if band_lat < 50:
+        return 3600  # 1"   (Argentina continental)
+    if band_lat < 60:
+        return 2400  # 1.5" (Santa Cruz, Tierra del Fuego)
+    if band_lat < 70:
+        return 1800  # 2"
+    if band_lat < 80:
+        return 1200  # 3"
+    if band_lat < 85:
+        return 720   # 5"
+    return 360       # 10"
+
+
+# Lista de tiles del bucket, cacheada en memoria por proceso (autoridad de existencia).
+_TILE_LIST_CACHE: set[str] | None = None
+
+
+def _tilelist_path() -> Path:
+    """Ruta de la lista de tiles del bucket, cacheada junto a los COG."""
+    return dem_dir() / "tileList.txt"
+
+
+def _load_tile_list() -> set[str]:
+    """Conjunto de nombres Copernicus que EXISTEN en el bucket.
+
+    Es la autoridad de "qué hay": un tile en la lista se descarga; uno fuera de
+    la lista es océano y se sintetiza. Cachea `data/dem/tileList.txt`; si falta y
+    hay red, la baja una sola vez.
+    """
+    global _TILE_LIST_CACHE
+    if _TILE_LIST_CACHE is not None:
+        return _TILE_LIST_CACHE
+
+    p = _tilelist_path()
+    if not p.exists():
+        url = f"{settings.copernicus_s3_base}/tileList.txt"
+        try:
+            resp = httpx.get(url, timeout=60.0, follow_redirects=True)
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            raise DEMDownloadError(
+                f"No se pudo obtener la lista de tiles del bucket Copernicus: {e}"
+            ) from e
+        p.write_text(resp.text, encoding="utf-8")
+
+    names = {
+        line.strip()
+        for line in p.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    _TILE_LIST_CACHE = names
+    return names
+
+
+def _tile_in_bucket(tid: str) -> bool:
+    """True si el tile existe en el bucket (según tileList.txt). Si no, es océano."""
+    return _copernicus_name(tid) in _load_tile_list()
+
+
+def _download_tile_s3(tid: str) -> None:
+    """Descarga anónima del tile COG desde el bucket público de Copernicus.
+
+    Los tiles del bucket YA son COG: se validan y se lee su resolución, NO se
+    reconvierten (se guardan tal cual, byte a byte, para no alterar el dato).
+    """
+    name = _copernicus_name(tid)
+    url = f"{settings.copernicus_s3_base}/{name}/{name}.tif"
+    try:
+        resp = httpx.get(url, timeout=120.0, follow_redirects=True)
+        resp.raise_for_status()
+    except httpx.TimeoutException as e:
+        raise DEMDownloadError(
+            f"Timeout al descargar el tile {tid} del bucket Copernicus."
+        ) from e
+    except httpx.HTTPError as e:
+        raise DEMDownloadError(
+            f"Error al descargar el tile {tid} del bucket Copernicus: {e}"
+        ) from e
+
+    dest = tile_path(tid)
+    tmp = dest.with_suffix(".tmp.tif")
+    tmp.write_bytes(resp.content)
+
+    # Validamos que sea COG y leemos la resolución real (NO reconvertimos).
+    is_valid, _, _ = cog_validate(str(tmp), quiet=True)
+    with rasterio.open(str(tmp)) as src:
+        resolution_m = round(abs(src.transform.a) * 111_320.0, 2)
+
+    tmp.replace(dest)
+    _register_tile(tid, resolution_m, is_valid, ocean=False)
+
+
+def _synth_ocean_tile(tid: str) -> None:
+    """Sintetiza un tile de océano: plano a nivel del mar (0 m), sin pegarle a la red.
+
+    Clona el grid de los tiles REALES de su banda de latitud (dimensiones, paso y
+    offset de medio píxel) para que `read_mosaic` no tenga costura en la costa.
+    Se guarda como COG y se marca `ocean=True` en el manifest.
+    """
+    lat_sw, lon_sw = parse_tile_id(tid)
+    width = _band_width(lat_sw)
+    height = 3600
+    px = 1.0 / width   # paso en longitud (banda-dependiente)
+    py = 1.0 / height  # paso en latitud (siempre 1")
+
+    # Registro pixel-is-point: origen desplazado medio píxel, idéntico a los reales.
+    transform = Affine(px, 0.0, lon_sw - 0.5 * px, 0.0, -py, (lat_sw + 1) + 0.5 * py)
+    data = np.zeros((height, width), dtype="float32")
+
+    mem_profile = {
+        "driver": "GTiff",
+        "dtype": "float32",
+        "count": 1,
+        "height": height,
+        "width": width,
+        "crs": rasterio.crs.CRS.from_epsg(4326),
+        "transform": transform,
+    }
+    dest = tile_path(tid)
+    tmp = dest.with_suffix(".tmp.tif")
+    with MemoryFile() as memfile:
+        with memfile.open(**mem_profile) as src:
+            src.write(data, 1)
+        # Reabrimos en read-only para cog_translate (evita el aviso de deprecación).
+        with memfile.open() as src:
+            cog_translate(
+                src, str(tmp), cog_profiles.get("deflate"), in_memory=True, quiet=True
+            )
+
+    is_valid, _, _ = cog_validate(str(tmp), quiet=True)
+    tmp.replace(dest)
+    _register_tile(tid, round(px * 111_320.0, 2), is_valid, ocean=True)
+
+
+# --------------------------------------------------------------------------- #
+# Ruteo de descarga por fuente (S3 default / OpenTopography fallback)
+# --------------------------------------------------------------------------- #
+def download_tile(tid: str, api_key: str | None = None) -> None:
+    """Baja (o sintetiza) un tile, ruteando por `settings.dem_source`.
+
+    - "s3" (default): descarga anónima del bucket Copernicus. Tile en tileList ->
+      se descarga; tile fuera de la lista -> es océano -> se sintetiza plano.
+      NO se usa ni se lee API key.
+    - "opentopography": fallback con API key (header > .env).
+    """
+    if settings.dem_source == "opentopography":
+        _download_tile_ot(tid, api_key=api_key)
+        return
+
+    # Camino S3 (default).
+    if _tile_in_bucket(tid):
+        _download_tile_s3(tid)
+    else:
+        _synth_ocean_tile(tid)
+
+
+def _download_tile_ot(tid: str, api_key: str | None = None) -> None:
+    """Baja un tile de OpenTopography y lo guarda como COG (fallback opcional).
+
+    Precedencia de la key: si llega `api_key` (header por request del usuario) se
+    usa esa; si no, se cae a la de `.env` (`settings.opentopography_api_key`). La
+    key NUNCA se incluye en mensajes de error ni se loguea.
+
+    Lanza:
+    - DEMConfigError      si no hay key (ni header ni .env).
+    - DEMInvalidKeyError  si OpenTopography la rechaza (401/403).
+    - DEMDownloadError    ante otros fallos de red/HTTP.
+    """
+    effective_key = api_key or settings.opentopography_api_key
+    if not effective_key:
         raise DEMConfigError(
-            "Falta OPENTOPOGRAPHY_API_KEY. Obtené una clave gratuita en "
-            "https://portal.opentopography.org y guardala en .env."
+            "Falta la API key de OpenTopography. Obtené una clave gratuita en "
+            "https://portal.opentopography.org y cargala (en la app o en .env)."
         )
 
     west, south, east, north = tile_bounds(tid)
@@ -223,7 +440,7 @@ def download_tile(tid: str) -> None:
         "west": west,
         "east": east,
         "outputFormat": "GTiff",
-        "API_Key": settings.opentopography_api_key,
+        "API_Key": effective_key,
     }
 
     try:
@@ -234,6 +451,13 @@ def download_tile(tid: str) -> None:
             f"Timeout al descargar el tile {tid} de OpenTopography."
         ) from e
     except httpx.HTTPStatusError as e:
+        # 401/403 = la key no sirve. Lo separamos para que el frontend reaccione
+        # distinto (volver a pedir la key) en vez de tratarlo como falla de red.
+        # No incluimos la respuesta cruda para no arrastrar la key a un mensaje.
+        if e.response.status_code in (401, 403):
+            raise DEMInvalidKeyError(
+                "OpenTopography rechazó la API key (inválida o sin permisos)."
+            ) from e
         raise DEMDownloadError(
             f"OpenTopography respondió {e.response.status_code} para el tile {tid}: "
             f"{e.response.text[:200]}"
@@ -283,11 +507,14 @@ def coverage_for_bbox(bbox: Bbox) -> dict:
     }
 
 
-def ensure_dem(bbox: Bbox) -> dict:
+def ensure_dem(bbox: Bbox, api_key: str | None = None) -> dict:
     """Garantiza que los tiles del bbox estén en caché.
 
     - Tiles faltantes con internet -> se bajan y cachean como COG.
     - Tiles faltantes sin internet -> DEMOfflineError.
+
+    `api_key` (opcional): key del usuario que llega por header; si no se pasa, se
+    usa la de `.env`. Se propaga a cada `download_tile`.
 
     Devuelve el estado de cobertura resultante con la lista de tiles bajados.
     """
@@ -304,7 +531,7 @@ def ensure_dem(bbox: Bbox) -> dict:
 
     downloaded: list[str] = []
     for tid in missing:
-        download_tile(tid)
+        download_tile(tid, api_key=api_key)
         downloaded.append(tid)
 
     return {**coverage_for_bbox(bbox), "downloaded": downloaded}
