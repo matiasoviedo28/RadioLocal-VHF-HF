@@ -13,6 +13,7 @@ from app.routers import (
     coverage,
     coverages,
     health,
+    hf_coverage,
     regions,
     terrain,
     version,
@@ -52,3 +53,6 @@ app.include_router(coverage.router)
 
 # Coberturas guardadas (persistencia en disco).
 app.include_router(coverages.router)
+
+# Fase HF: motor de propagación HF (ITU-R P.533, cobertura de área).
+app.include_router(hf_coverage.router)

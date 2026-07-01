@@ -105,6 +105,75 @@ en `docker-compose.yml` y carpeta `data/`) para sumarlas sin replantear el dise�
 - **A futuro:** mover el binario y `coverage.py` a un **worker** dedicado (con Redis para
   encolar corridas largas), sin cambiar la lógica.
 
+### Motor HF — ITURHFProp (ITU-R P.533) *(Fase HF — implementado)*
+Predicción de propagación **HF** por cobertura de **área** (modo distinto al VHF punto-radio).
+
+- **Binario:** `ITURHFProp` + `libp533.so`/`libp372.so`, compilados desde el repo oficial
+  ITU-R-HF **v14.3** (tarball vía `curl`, sin git) en un stage `builder-hf` del
+  `backend/Dockerfile`. El runtime copia binario + libs a `/usr/local/lib` (`ldconfig`; el
+  binario las carga por `dlopen`/soname) + los datos ionosféricos/CCIR (~132 MB) a
+  `/opt/hf/data`. Notas de build: hace falta `libc6-dev`, y `make clean` antes de `make all`
+  (el tarball trae `.o/.so` precompilados). No toca el stage de Signal-Server.
+- **Servicio:** `backend/app/services/hf_coverage.py` — función pura `run_hf_coverage(params)`
+  (sin FastAPI). Arma el `.in` desde una plantilla (validada en el spike HF-0), corre el binario,
+  **parsea el `.out` mapeando columnas dinámicamente** desde la sección `Data Format` (no
+  hardcodea posiciones), reconstruye la grilla de BCR y la rasteriza a PNG RGBA (interpolación
+  bilineal con rasterio, sin scipy).
+- **SSN (manchas solares R12):** `backend/app/services/ssn.py` — `get_ssn(year, month)` con Plan
+  A/B calcado del DEM: descarga el pronóstico de **NOAA/SWPC** (keyless), lo cachea en
+  `data/ssn/` (TTL 7 días) y **degrada con elegancia** (online→`noaa`, caché→`cache`,
+  sin red ni caché→`default` con `hf_default_ssn=100`). **Nunca lanza** al flujo de cobertura.
+
+**Contrato de endpoints (para el frontend):**
+- `POST /api/hf/coverage` — body: `tx_lat, tx_lon, frequency_mhz, month (1–12), hour_utc (0–23),
+  range_km` (alcance del área), y opcionales `ssn` (override manual), `year` (default año UTC),
+  `noise` (default `RURAL`), `increment`. Responde **PNG** (overlay) + headers: `X-Bbox`
+  (`oeste,sur,este,norte`, mismo criterio que el overlay VHF), `X-SSN`, `X-SSN-Source`
+  (`noaa|cache|default|manual`), `X-SSN-AsOf`, `X-Grid` (`n_lat x n_lon`), `X-Grid-Inc`.
+  Errores: **422** (alcance fuera de rango / params inválidos), 500 (motor).
+- `GET /api/hf/ssn?year=&month=` — default = año/mes UTC actual. Responde
+  `{value, source, as_of, year, month}` para mostrar la procedencia del SSN en la UI.
+
+**Mapeo de hora UI 0–23 ↔ motor 1–24:** el motor usa la convención **1–24** y **segfaultea con
+0**. La UI (y el endpoint) exponen **0–23** (natural); `hf_coverage.py` traduce `UI 0 (medianoche)
+→ motor 24` y `UI 1..23 → motor 1..23`. Verificado: hora 0 da patrón nocturno coherente.
+
+**Escala de color (fiabilidad de circuito BCR, %):** bandas discretas — la leyenda del frontend
+refleja EXACTAMENTE estos cortes (`_BANDAS_BCR` en `hf_coverage.py`): **≥90** verde fuerte
+`#1a9850` · **75–90** verde-amarillo `#a6d96a` · **50–75** naranja `#fdae61` · **<50** rojo
+`#d73027` (semitransparente). La baja fiabilidad cerca del Tx en ciertas bandas/horas es la **zona
+de silencio** (skip zone) física, no un error.
+
+**Área CENTRADA en el Tx (independiente del zoom):** el área de cálculo NO viene del viewport del
+mapa (era un error de diseño: HF es de larga distancia; con zoom cerrado daba un área degenerada).
+El usuario elige un **Alcance** (radio en km) y el **backend deriva el bbox = Tx ± alcance**
+(`_bbox_centrado` en `hf_coverage.py`, única fuente de la conversión km→grados:
+`Δlat° = km/111`, `Δlon° = km/(111·cos(lat_tx))` — la celda en lon crece con la latitud). La latitud
+se **clampea** a [-85, 85] y la longitud se **clipea** a [-180, 180] (sin wrappear el antimeridiano).
+Presets de la UI (mismos en el `<select>` del frontend, `ALCANCES_HF`): **Regional ~2000 km ·
+Continental ~4000 km (default) · DX/Largo ~7000 km**; caps en config (`hf_range_min_km=100`,
+`hf_range_max_km=8000`). `latinc/lnginc` se derivan para no pasar `hf_max_points` (alcance mayor ⇒
+grilla más gruesa; el campo HF es suave). Tras un cálculo, el frontend hace **`fitBounds`** al
+`X-Bbox` para encuadrar toda la cobertura sin importar el zoom previo. **El resultado es idéntico en
+cualquier zoom del mapa.**
+
+**Robustez — área degenerada (bugfix):** un área muy chica (viewport con zoom cerrado, ej. bbox de
+fracciones de grado) colapsaba la grilla a **1 punto** por dimensión → el bbox de nodos quedaba con
+extensión 0 → **`ZeroDivisionError` en `_tamano_raster`** (`lado * span_lat / span_lon` con
+`span_lon = 0`) → **HTTP 500**. Fix de raíz: `_derivar_incremento` rechaza áreas con lado
+`< _MIN_SPAN_DEG` (1° ≈ 111 km) o alto/ancho ~0 con **422 amable** ("La cobertura HF es de larga
+distancia: alejá el mapa…"), y `_tamano_raster` se blinda para caer a un raster cuadrado ante
+cualquier extensión 0. **Decisión UX:** un área minúscula no tiene sentido físico en HF (larga
+distancia), así que se pide agrandar el área (422 que el frontend ya muestra) en vez de expandir el
+bbox silenciosamente. El colormap es discreto por cortes fijos (no normaliza por min/max), así que
+grillas de valor uniforme (todo 100 %) no dividen por cero. Guard de regresión:
+`backend/tests/test_hf_degenerado.py` (área chica, bbox 0, valores uniformes → nunca 500).
+
+**Frontend (HF-3):** toggle **VHF | HF** en la topbar (default VHF, aditivo). En HF se ocultan
+"Relieve"/"Descargar zona" (HF no usa DEM), se cambia al panel `#panel-hf` (banda→MHz, mes, hora,
+SSN auto con procedencia, Avanzado plegado con override de SSN/ruido) y se dibuja el overlay con
+`agregarOverlayRaster` + leyenda. VHF queda sin cambios de comportamiento.
+
 ### Exportación a Google Earth — KMZ *(implementado)*
 - **Servicio:** `backend/app/services/kmz.py` — `build_kmz(png, bbox, params, nombre)`
   arma un **KMZ** (ZIP autocontenido, solo `zipfile` de la stdlib): `doc.kml` +

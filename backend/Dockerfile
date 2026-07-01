@@ -41,6 +41,45 @@ RUN cd ss \
     && make -j"$(nproc)"
 
 # --------------------------------------------------------------------------- #
+# Stage 1b — compilación del motor HF (ITURHFProp, ITU-R P.533)
+# --------------------------------------------------------------------------- #
+# Motor de propagación HF, independiente de Signal-Server. Receta portada del
+# spike HF-0 (hf-spike/Dockerfile), YA validada. Fuente fijada a la release v14.3
+# del repo oficial, bajada como tarball con curl (SIN git) para reproducibilidad.
+#
+# Notas de build (aprendidas en el spike):
+#  - libc6-dev es obligatorio: gcc en debian-slim no trae los headers de libc.
+#  - make clean antes de make all: el tarball trae .o/.so precompilados.
+#  - El binario NO linkea las libs; las carga con dlopen("libp533.so"/"libp372.so")
+#    por soname -> en runtime deben estar en /usr/local/lib + ldconfig.
+FROM debian:trixie-slim AS builder-hf
+
+ARG ITURHF_VERSION=14.3
+ARG ITURHF_URL=https://github.com/ITU-R-Study-Group-3/ITU-R-HF/archive/refs/tags/v${ITURHF_VERSION}.tar.gz
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl ca-certificates gcc make libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+RUN curl -fL --retry 3 -o src.tar.gz "${ITURHF_URL}" \
+    && tar xzf src.tar.gz \
+    && rm src.tar.gz
+
+# El Makefile de Linux/ recurre en P533 -> P372 -> ITURHFProp.
+WORKDIR /build/ITU-R-HF-${ITURHF_VERSION}/Linux
+RUN make clean && make all
+
+# Consolidar artefactos (binario + 2 libs + datos ionosféricos ~132 MB) en /opt/hf.
+WORKDIR /build/ITU-R-HF-${ITURHF_VERSION}
+RUN mkdir -p /opt/hf/bin /opt/hf/lib /opt/hf/data \
+    && cp ITURHFProp/Linux/ITURHFProp /opt/hf/bin/ \
+    && cp P533/Linux/libp533.so       /opt/hf/lib/ \
+    && cp P372/Linux/libp372.so       /opt/hf/lib/ \
+    && cp -r P372/Data/.              /opt/hf/data/
+
+# --------------------------------------------------------------------------- #
 # Stage 2 — runtime del backend
 # --------------------------------------------------------------------------- #
 FROM python:3.12-slim
@@ -61,6 +100,15 @@ RUN apt-get update \
 
 # Copiamos SOLO el binario LIDAR del motor RF desde el stage de compilación.
 COPY --from=builder-ss /build/ss/build/signalserverLIDAR /usr/local/bin/signalserverLIDAR
+
+# --- Motor HF (ITURHFProp) desde el stage builder-hf ---
+# Binario + las 2 libs compartidas (el binario las carga por dlopen/soname) + los
+# datos ionosféricos. ldconfig registra las .so en el cache del loader.
+COPY --from=builder-hf /opt/hf/bin/ITURHFProp /usr/local/bin/ITURHFProp
+COPY --from=builder-hf /opt/hf/lib/libp533.so /usr/local/lib/libp533.so
+COPY --from=builder-hf /opt/hf/lib/libp372.so /usr/local/lib/libp372.so
+COPY --from=builder-hf /opt/hf/data/          /opt/hf/data/
+RUN ldconfig
 
 # Instalar dependencias Python primero para aprovechar la caché de capas.
 COPY requirements.txt .

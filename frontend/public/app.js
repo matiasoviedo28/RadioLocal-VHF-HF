@@ -398,7 +398,12 @@ function fijarTx(lat, lon) {
   invalidarCobertura();
 }
 
-map.on("click", (ev) => fijarTx(ev.lngLat.lat, ev.lngLat.lng));
+// Click = ubicar Tx. Ruteo por modo: en HF va al Tx del panel HF, en VHF al de
+// siempre (ruta VHF idéntica cuando modoActual === 'vhf').
+map.on("click", (ev) => {
+  if (modoActual === "hf") fijarTxHF(ev.lngLat.lat, ev.lngLat.lng);
+  else fijarTx(ev.lngLat.lat, ev.lngLat.lng);
+});
 map.on("zoom", actualizarControles);
 
 btnCalcular.addEventListener("click", async () => {
@@ -1323,3 +1328,252 @@ window.addEventListener("resize", () => {
 if (!localStorage.getItem(TOUR_FLAG)) {
   tourAbrir(0);
 }
+
+// ==========================================================================
+// MODO HF — cobertura de propagación HF (ITU-R P.533). TODO ADITIVO.
+//
+// En modo VHF nada de esto interviene: la app se comporta igual que siempre.
+// El toggle del topbar alterna entre el panel VHF y el panel HF, limpiando el
+// overlay del otro modo para que no se mezclen cálculos.
+// ==========================================================================
+const SRC_HF = "hf-src";
+const LAYER_HF = "hf-layer";
+
+let modoActual = "vhf"; // 'vhf' | 'hf'
+let txMarkerHF = null; // marcador del Tx en modo HF (separado del de VHF)
+
+const btnModoVHF = document.getElementById("modo-vhf");
+const btnModoHF = document.getElementById("modo-hf");
+const panelHF = document.getElementById("panel-hf");
+const btnOfflineTop = document.getElementById("btn-offline");
+const hfLat = document.getElementById("hf-lat");
+const hfLon = document.getElementById("hf-lon");
+const hfBanda = document.getElementById("hf-banda");
+const hfFreqOtraCampo = document.getElementById("hf-freq-otra-campo");
+const hfFreqOtra = document.getElementById("hf-freq-otra");
+const hfAlcance = document.getElementById("hf-alcance");
+const hfMes = document.getElementById("hf-mes");
+const hfHora = document.getElementById("hf-hora");
+const hfSsnTxt = document.getElementById("hf-ssn-txt");
+const hfSsnOverride = document.getElementById("hf-ssn-override");
+const hfRuido = document.getElementById("hf-ruido");
+const hfCalcular = document.getElementById("hf-calcular");
+const hfLeyenda = document.getElementById("hf-leyenda");
+const hfSsnFuente = document.getElementById("hf-ssn-fuente");
+
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+// Alcances HF (radio en km, área CENTRADA en el Tx). Único lugar de la UI donde se
+// definen; deben coincidir con los presets de config.py del backend. El área NO
+// depende del zoom del mapa (HF es de larga distancia).
+const ALCANCES_HF = [
+  { km: 2000, label: "Regional (~2000 km)" },
+  { km: 4000, label: "Continental (~4000 km)" }, // default
+  { km: 7000, label: "DX / Largo (~7000 km)" },
+];
+const ALCANCE_DEFAULT_KM = 4000;
+
+// Poblar los selects de mes (1-12) y hora (0-23), con default = UTC actual.
+(function poblarSelectsHF() {
+  const ahora = new Date();
+  const mesUTC = ahora.getUTCMonth() + 1; // 1-12
+  const horaUTC = ahora.getUTCHours(); // 0-23
+  MESES_ES.forEach((nombre, i) => {
+    const op = document.createElement("option");
+    op.value = String(i + 1);
+    op.textContent = nombre.charAt(0).toUpperCase() + nombre.slice(1);
+    if (i + 1 === mesUTC) op.selected = true;
+    hfMes.appendChild(op);
+  });
+  for (let h = 0; h < 24; h++) {
+    const op = document.createElement("option");
+    op.value = String(h);
+    op.textContent = `${String(h).padStart(2, "0")}:00`;
+    if (h === horaUTC) op.selected = true;
+    hfHora.appendChild(op);
+  }
+  ALCANCES_HF.forEach(({ km, label }) => {
+    const op = document.createElement("option");
+    op.value = String(km);
+    op.textContent = label;
+    if (km === ALCANCE_DEFAULT_KM) op.selected = true;
+    hfAlcance.appendChild(op);
+  });
+})();
+
+// Frecuencia (MHz) elegida: de la banda o del campo libre "Otra".
+function hfFrecuencia() {
+  if (hfBanda.value === "otra") return parseFloat(hfFreqOtra.value);
+  return parseFloat(hfBanda.value);
+}
+
+hfBanda.addEventListener("change", () => {
+  hfFreqOtraCampo.hidden = hfBanda.value !== "otra";
+});
+
+// Habilita "Calcular" sólo con Tx puesto (el área grande la corta el backend).
+function actualizarControlesHF() {
+  const hayTx = !!(hfLat.value && hfLon.value);
+  hfCalcular.disabled = ocupado || !hayTx;
+}
+map.on("zoom", actualizarControlesHF);
+
+function fijarTxHF(lat, lon) {
+  hfLat.value = lat.toFixed(5);
+  hfLon.value = lon.toFixed(5);
+  if (txMarkerHF) {
+    txMarkerHF.setLngLat([lon, lat]);
+  } else {
+    txMarkerHF = new maplibregl.Marker({ color: "#b71c1c", draggable: true })
+      .setLngLat([lon, lat])
+      .addTo(map);
+    txMarkerHF.on("dragend", () => {
+      const ll = txMarkerHF.getLngLat();
+      hfLat.value = ll.lat.toFixed(5);
+      hfLon.value = ll.lng.toFixed(5);
+      actualizarControlesHF();
+    });
+  }
+  actualizarControlesHF();
+}
+
+// GET /api/hf/ssn: resuelve el SSN del mes/año y muestra su procedencia.
+async function cargarSSN() {
+  const year = new Date().getUTCFullYear();
+  const month = parseInt(hfMes.value, 10);
+  hfSsnTxt.textContent = "SSN …";
+  try {
+    const resp = await fetch(`/api/hf/ssn?year=${year}&month=${month}`);
+    if (!resp.ok) throw new Error("no");
+    const d = await resp.json();
+    hfSsnTxt.textContent = `SSN ${d.value} · ${etiquetaFuenteSSN(d.source)}`;
+  } catch {
+    hfSsnTxt.textContent = "SSN — · sin datos";
+  }
+}
+
+// Traduce la procedencia del SSN a un texto para el usuario.
+function etiquetaFuenteSSN(source) {
+  if (source === "noaa" || source === "cache") return "pronóstico NOAA";
+  if (source === "manual") return "valor manual";
+  return "valor por defecto (sin conexión)";
+}
+
+hfMes.addEventListener("change", cargarSSN);
+
+// --- Toggle de modo VHF | HF ---
+function setModo(modo) {
+  if (modo === modoActual) return;
+  modoActual = modo;
+
+  const esHF = modo === "hf";
+  btnModoVHF.classList.toggle("activo", !esHF);
+  btnModoHF.classList.toggle("activo", esHF);
+  btnModoVHF.setAttribute("aria-selected", String(!esHF));
+  btnModoHF.setAttribute("aria-selected", String(esHF));
+
+  if (esHF) {
+    // Apagar relieve si estaba activo (HF no usa DEM) y ocultar sus botones.
+    if (relieveActivo) {
+      quitarOverlay(SRC_RELIEVE, LAYER_RELIEVE);
+      relieveActivo = false;
+      btnRelieve.classList.remove("activo");
+      btnRelieve.title = "Mostrar relieve";
+    }
+    btnRelieve.hidden = true;
+    btnOfflineTop.hidden = true;
+    panelOffline.classList.remove("visible");
+    // Cambiar de panel y limpiar el overlay VHF (no se mezclan modos).
+    panel.classList.remove("visible");
+    panelHF.classList.add("visible");
+    quitarOverlay(SRC_COBERTURA, LAYER_COBERTURA);
+    setEstado("");
+    // HF cubre miles de km: si el zoom está muy cerrado, alejamos suave.
+    if (map.getZoom() > 6) map.easeTo({ zoom: 5, duration: 600 });
+    cargarSSN();
+    actualizarControlesHF();
+  } else {
+    // Volver a VHF: restaurar todo lo de VHF, limpiar overlay HF.
+    btnRelieve.hidden = false;
+    btnOfflineTop.hidden = false;
+    panelHF.classList.remove("visible");
+    panel.classList.add("visible");
+    quitarOverlay(SRC_HF, LAYER_HF);
+    setEstado("");
+    actualizarControles();
+  }
+}
+
+btnModoVHF.addEventListener("click", () => setModo("vhf"));
+btnModoHF.addEventListener("click", () => setModo("hf"));
+
+// --- Cálculo de cobertura HF ---
+hfCalcular.addEventListener("click", async () => {
+  if (ocupado || hfCalcular.disabled) return;
+
+  const freq = hfFrecuencia();
+  if (!freq || freq <= 0) {
+    setEstado("Ingresá una frecuencia válida.", true);
+    return;
+  }
+
+  // El área es CENTRADA en el Tx con el alcance elegido: NO depende del zoom del
+  // mapa. El backend deriva el bbox (Tx ± range_km).
+  const body = {
+    tx_lat: parseFloat(hfLat.value),
+    tx_lon: parseFloat(hfLon.value),
+    frequency_mhz: freq,
+    month: parseInt(hfMes.value, 10),
+    hour_utc: parseInt(hfHora.value, 10),
+    noise: hfRuido.value,
+    range_km: parseInt(hfAlcance.value, 10),
+  };
+  // SSN sólo si el usuario lo overrideó en Avanzado; si no, lo resuelve el backend.
+  const override = hfSsnOverride.value.trim();
+  if (override !== "") body.ssn = parseInt(override, 10);
+
+  setOcupado(true, "Calculando cobertura HF…");
+  hfCalcular.disabled = true;
+  try {
+    const resp = await fetch("/api/hf/coverage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    // 422: guard del backend (área muy grande o muy chica). Mostramos el mensaje
+    // amable que ya viene en {detail} (p. ej. "alejá el mapa"), no uno hardcodeado.
+    if (resp.status === 422) {
+      setEstado(await mensajeDeError(resp), true);
+      return;
+    }
+    if (!resp.ok) throw new Error(await mensajeDeError(resp));
+
+    // Sin fallback de viewport: el área la define el backend (Tx ± alcance). El
+    // X-Bbox del resultado es la única fuente de los bounds.
+    const bbox = bboxDeHeader(resp, bboxViewport());
+    const blob = await resp.blob();
+    agregarOverlayRaster(SRC_HF, LAYER_HF, blob, bbox, 0.6);
+    // Encuadre automático: mostrar toda la cobertura sin importar el zoom previo.
+    const [bw, bs, be, bn] = bbox;
+    map.fitBounds([[bw, bs], [be, bn]], { padding: 40, duration: 700 });
+
+    // Procedencia del SSN que usó el cálculo (headers X-SSN*).
+    const ssnVal = resp.headers.get("X-SSN");
+    const ssnSrc = resp.headers.get("X-SSN-Source") || "";
+    if (ssnVal) {
+      hfSsnFuente.textContent = `SSN usado: ${ssnVal} · ${etiquetaFuenteSSN(ssnSrc)}`;
+    }
+    hfLeyenda.hidden = false;
+    setEstado("");
+  } catch (err) {
+    console.error(err);
+    setEstado("Cobertura HF: " + err.message, true);
+  } finally {
+    setOcupado(false);
+    actualizarControlesHF();
+  }
+});

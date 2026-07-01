@@ -22,6 +22,16 @@
     <img id="topbar-logo" src="logo.png" alt="Logo de RadioLocal-VHF-HF" />
     <strong>RadioLocal-VHF-HF</strong>
     <span class="subtitulo">Planificación de cobertura de radio · Argentina</span>
+
+    <!--
+      Toggle de modo VHF | HF (segmentado). Default VHF: la app se comporta
+      EXACTAMENTE igual que antes. HF suma su panel/overlay encima (aditivo).
+    -->
+    <div id="modo-toggle" role="tablist" aria-label="Modo de cobertura">
+      <button id="modo-vhf" type="button" class="activo" role="tab" aria-selected="true">VHF</button>
+      <button id="modo-hf" type="button" role="tab" aria-selected="false">HF</button>
+    </div>
+
     <!--
       Toggle de la capa de relieve (hillshade del viewport actual). El estado
       (prendido/apagado) se muestra con la clase .activo (relleno), no con texto.
@@ -128,6 +138,110 @@
       <h4>Coberturas guardadas</h4>
       <p id="guardadas-vacio" class="ayuda">Todavía no guardaste ninguna.</p>
       <ul id="lista-guardadas"></ul>
+    </div>
+  </div>
+
+  <!--
+    Panel "Cobertura HF" (ADITIVO, oculto por defecto). Espeja el estilo del panel
+    VHF. Se muestra sólo en modo HF (toggle del topbar). HF no usa DEM/relieve.
+  -->
+  <div id="panel-hf">
+    <h3>Cobertura HF</h3>
+    <p class="ayuda">Hacé clic en el mapa para ubicar tu estación.</p>
+
+    <div class="campo">
+      <label>Lat
+        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      </label>
+      <input id="hf-lat" type="number" step="0.00001" readonly />
+    </div>
+    <div class="campo">
+      <label>Lon
+        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      </label>
+      <input id="hf-lon" type="number" step="0.00001" readonly />
+    </div>
+
+    <div class="campo">
+      <label>Banda
+        <span class="info" tabindex="0" role="img" aria-label="Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.">i<span class="tip" aria-hidden="true">Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.</span></span>
+      </label>
+      <select id="hf-banda">
+        <option value="3.6">80 m (3.6 MHz)</option>
+        <option value="7.1" selected>40 m (7.1 MHz)</option>
+        <option value="10.1">30 m (10.1 MHz)</option>
+        <option value="14.1">20 m (14.1 MHz)</option>
+        <option value="18.1">17 m (18.1 MHz)</option>
+        <option value="21.2">15 m (21.2 MHz)</option>
+        <option value="28.5">10 m (28.5 MHz)</option>
+        <option value="otra">Otra frecuencia (MHz)…</option>
+      </select>
+    </div>
+    <div class="campo" id="hf-freq-otra-campo" hidden>
+      <label>Frec (MHz)
+        <span class="info" tabindex="0" role="img" aria-label="Frecuencia exacta en MHz (1.6 a 30).">i<span class="tip" aria-hidden="true">Frecuencia exacta en MHz (1.6 a 30).</span></span>
+      </label>
+      <input id="hf-freq-otra" type="number" step="0.1" min="1.6" max="30" value="7.1" />
+    </div>
+
+    <div class="campo">
+      <label>Alcance
+        <span class="info" tabindex="0" role="img" aria-label="Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.">i<span class="tip" aria-hidden="true">Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.</span></span>
+      </label>
+      <select id="hf-alcance"></select>
+    </div>
+
+    <div class="campo">
+      <label>Mes
+        <span class="info" tabindex="0" role="img" aria-label="Mes del año a analizar (la propagación HF cambia mucho por estación).">i<span class="tip" aria-hidden="true">Mes del año a analizar (la propagación HF cambia mucho por estación).</span></span>
+      </label>
+      <select id="hf-mes"></select>
+    </div>
+    <div class="campo">
+      <label>Hora UTC
+        <span class="info" tabindex="0" role="img" aria-label="Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.">i<span class="tip" aria-hidden="true">Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.</span></span>
+      </label>
+      <select id="hf-hora"></select>
+    </div>
+
+    <!-- SSN resuelto solo (NOAA) con su procedencia. Solo lectura; editable en Avanzado. -->
+    <p id="hf-ssn-txt" class="hf-ssn">SSN —</p>
+
+    <!-- Avanzado: el usuario común no lo toca. <details> nativo = colapso sin JS. -->
+    <details id="hf-avanzado">
+      <summary>Avanzado</summary>
+      <div class="campo">
+        <label>SSN
+          <span class="info" tabindex="0" role="img" aria-label="Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.">i<span class="tip" aria-hidden="true">Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.</span></span>
+        </label>
+        <input id="hf-ssn-override" type="number" min="0" max="311" placeholder="auto" />
+      </div>
+      <div class="campo">
+        <label>Ruido
+          <span class="info" tabindex="0" role="img" aria-label="Ambiente de ruido man-made en el receptor. Rural es un buen default general.">i<span class="tip" aria-hidden="true">Ambiente de ruido man-made en el receptor. Rural es un buen default general.</span></span>
+        </label>
+        <select id="hf-ruido">
+          <option value="CITY">Ciudad</option>
+          <option value="RESIDENTIAL">Residencial</option>
+          <option value="RURAL" selected>Rural</option>
+          <option value="QUIETRURAL">Rural silencioso</option>
+        </select>
+      </div>
+    </details>
+
+    <button id="hf-calcular" type="button" disabled>Calcular cobertura HF</button>
+
+    <!-- Leyenda: refleja EXACTAMENTE los cortes de color del backend (_BANDAS_BCR). -->
+    <div id="hf-leyenda" class="hf-leyenda" hidden>
+      <h4>Fiabilidad del circuito</h4>
+      <ul>
+        <li><i class="hf-sw" style="background:#1a9850"></i> Fuerte (≥ 90 %)</li>
+        <li><i class="hf-sw" style="background:#a6d96a"></i> Buena (75–90 %)</li>
+        <li><i class="hf-sw" style="background:#fdae61"></i> Marginal (50–75 %)</li>
+        <li><i class="hf-sw" style="background:#d73027"></i> Baja (&lt; 50 %)</li>
+      </ul>
+      <p class="hf-nota">La baja fiabilidad cerca del transmisor en ciertas bandas/horas es normal (zona de silencio), no un error.</p>
+      <p id="hf-ssn-fuente" class="hf-mini"></p>
     </div>
   </div>
 

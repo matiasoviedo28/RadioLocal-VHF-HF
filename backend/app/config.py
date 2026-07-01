@@ -76,6 +76,45 @@ class Settings(BaseSettings):
     # Carpeta de coberturas guardadas (respaldo en disco). Persistida por el volumen.
     coverages_dir: str = "/app/data/coverages"
 
+    # --- Fase HF: motor de propagación HF (ITURHFProp, ITU-R P.533) ---
+    # Binario y datos compilados/empaquetados en la imagen (stage builder-hf).
+    hf_bin: str = "/usr/local/bin/ITURHFProp"
+    hf_data_path: str = "/opt/hf/data/"  # coeficientes CCIR + mapas ionosféricos
+
+    # Timeout (s) de una corrida de área HF. El motor es MUY rápido (~2,5 ms/punto,
+    # medido en el spike HF-0), así que 60s es holgado incluso para grillas grandes.
+    hf_timeout_s: int = 60
+
+    # Guard de tamaño de grilla: tope de puntos (n_lat*n_lon) de una corrida
+    # síncrona. ~40×40 = 1600 puntos ≈ 4s. Áreas que no entren ni con el incremento
+    # máximo razonable se rechazan con 422.
+    hf_max_points: int = 1600
+
+    # Lado máximo (px) del raster de salida tras interpolar la grilla gruesa.
+    hf_raster_max_px: int = 1024
+
+    # --- Alcance del área HF (radio en km, CENTRADA en el Tx; NO depende del zoom) ---
+    # Presets que ofrece la UI (mismos valores en el <select> del frontend):
+    #   Regional ~2000 km · Continental ~4000 km (default) · DX/Largo ~7000 km.
+    # El backend recibe range_km y lo valida contra [min, max]. Ajustables acá.
+    hf_range_default_km: float = 4000.0
+    hf_range_min_km: float = 100.0
+    hf_range_max_km: float = 8000.0
+
+    # SSN (número de manchas solares R12) por defecto. Fallback OFFLINE cuando no
+    # hay red ni caché de NOAA, o el mes pedido está fuera del pronóstico.
+    hf_default_ssn: int = 100
+
+    # Fuente del SSN: pronóstico mensual de NOAA/SWPC (keyless, sin API key).
+    # Array de objetos con campos "time-tag" ("YYYY-MM") y "predicted_ssn".
+    hf_ssn_url: str = (
+        "https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json"
+    )
+    # Caché del JSON (persistida por el volumen ./data, gitignoreada como el DEM).
+    hf_ssn_cache_path: str = "/app/data/ssn/predicted-solar-cycle.json"
+    # TTL de la caché: el archivo de NOAA se actualiza mensual, 7 días sobra.
+    hf_ssn_ttl_days: int = 7
+
     model_config = SettingsConfigDict(
         env_prefix="RADIOLOCAL_",
         env_file=".env",
