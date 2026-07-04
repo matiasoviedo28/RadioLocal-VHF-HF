@@ -13,6 +13,7 @@
 [![Copernicus GLO-30](https://img.shields.io/badge/DEM-Copernicus%20GLO--30-0b5394)](https://registry.opendata.aws/copernicus-dem/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Versión](https://img.shields.io/badge/versi%C3%B3n-1.2.0--beta-b71c1c)](https://github.com/matiasoviedo28/RadioLocal-VHF-HF)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 Herramienta para **planificar la cobertura de radio VHF y HF**, corriendo en tu
 propia máquina, con una interfaz simple e intuitiva. Pensada tanto para **servicios
@@ -205,6 +206,16 @@ ya tenés disponibles offline, resaltadas sobre el mapa:
 > El sufijo **`-beta`** indica que la funcionalidad está implementada y operativa, pero
 > aún no fue contrastada contra mediciones reales. Cuando el módulo HF se valide en el
 > campo —como se hizo con el VHF— pasará a **1.2.0** estable.
+
+---
+
+## Licencia
+
+El código de este proyecto está bajo licencia **MIT** (ver [LICENSE](LICENSE)).
+
+Incluye componentes de terceros con sus propias licencias — Signal-Server (GPL v2)
+e ITURHFProp (ITU-R) — detallados en
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ---
 
