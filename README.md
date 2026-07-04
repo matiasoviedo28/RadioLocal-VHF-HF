@@ -19,7 +19,7 @@ Herramienta para **planificar la cobertura de radio VHF y HF**, corriendo en tu
 propia máquina, con una interfaz simple e intuitiva. Pensada tanto para **servicios
 de emergencia** como para **radioaficionados de todo el mundo**.
 
-![Interfaz en localhost](docs/img/frontend-localhost.png)
+![RadioLocal-VHF-HF en acción — cobertura HF](docs/gif/HF.gif)
 
 ---
 
@@ -64,6 +64,8 @@ Trabaja en **dos modos**:
   corriendo **100% local**. Click en el mapa para ubicar el transmisor y un formulario
   para los parámetros (altura de antena, ERP, frecuencia, radio de cálculo).
 
+![Cálculo de cobertura VHF](docs/gif/VHF.gif)
+
 - **Cálculo de cobertura HF** con **ITURHFProp** (implementación de referencia de la
   **ITU-R P.533**), también **100% local**. Mapa de **área** con la fiabilidad del
   circuito por **banda** (80–10 m, o frecuencia libre), **mes** y **hora (UTC)**, con
@@ -98,8 +100,6 @@ Trabaja en **dos modos**:
 - **Despliegue con Docker Compose**: backend (FastAPI) + frontend (nginx + MapLibre)
   arrancan juntos con un solo comando.
 
-![Ejemplo de cobertura VHF](docs/img/ejemplo-cobertura.png)
-
 ---
 
 ## Requisitos
@@ -129,6 +129,8 @@ Trabaja en **dos modos**:
    ```
 
 3. **Abrí la app** en el navegador: **http://localhost:8080**
+
+   ![Clonar y levantar el proyecto](docs/gif/git_clone.gif)
 
 4. **Usá la app.** No hace falta configurar nada:
    - En **VHF**: acercá el zoom a tu zona, usá **"Descargar zona"** (baja el relieve la
