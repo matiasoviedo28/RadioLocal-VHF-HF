@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Identidad de la aplicación
     app_name: str = "RadioLocal-VHF-HF"
-    app_version: str = "1.1.0"  # 1.1.0: exportación de coberturas a Google Earth (KMZ)
+    app_version: str = "1.2.1"  # 1.2.1: cobertura HF (ITU-R P.533) estable
 
     # Entorno de ejecución: "dev" | "prod"
     env: str = "dev"
