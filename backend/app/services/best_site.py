@@ -42,8 +42,18 @@ KM_POR_GRADO_LAT = 111.32
 # para line-of-sight de radio, no el radio geométrico real.
 R_EFECTIVO_KM = 6371.0 * (4.0 / 3.0)
 
-DIAGONAL_MIN_KM = 0.5    # por debajo: el perímetro es un punto, no un área
-DIAGONAL_MAX_KM = 60.0   # por arriba: no entra holgado en el radio máx. del motor ITM
+DIAGONAL_MIN_KM = 0.5     # por debajo: el perímetro es un punto, no un área
+# EXPERIMENTAL: subido de 60 a 550 km para permitir perímetros grandes (una
+# provincia, por ejemplo — San Luis mide ~516 km de diagonal). El usuario
+# entiende que un único punto no va a cubrir TODA el área: el % resultante mide
+# cuánto abarca respecto de las demás candidatas, no una meta de cobertura
+# total. Por arriba de esto: la grilla de candidatos (tamaño fijo) queda muy
+# gruesa, el refinamiento ITM casi siempre pega contra `coverage_max_radius_km`
+# (100 km), y sobre todo `dem.read_mosaic` puede necesitar cargar >1 GB de
+# relieve en memoria de una sola vez (sin medir todavía cuánto tarda/aguanta a
+# esta escala real). Si esto se vuelve lento o se cae, hay que repensar el
+# enfoque (grilla adaptativa, sub-zonas), no solo subir el número.
+DIAGONAL_MAX_KM = 550.0
 
 CANDIDATOS_POR_LADO = 20   # grilla de candidatos (bruta, se filtra por polígono+buffer)
 CANDIDATOS_MAX = 500       # tope real evaluado (rapidez del barrido)
@@ -53,6 +63,19 @@ MUESTRAS_LOS = 40          # muestras por línea candidato→objetivo (heurísti
 TOP_K_REFINAR = 3          # candidatos que pasan a la corrida real (ITM)
 
 RADIO_REFINAR_MIN_KM = 3.0
+# Tope PROPIO del refinamiento (independiente de `coverage_max_radius_km`, que
+# sigue siendo el límite general de VHF, sin cambios). Antes, el radio de
+# refinamiento se estiraba hasta alcanzar el objetivo más lejano del polígono,
+# clipeado a 100 km: con un perímetro grande (una provincia) los 3 candidatos
+# corrían SIEMPRE a ~100 km, y el ITM escala ~radio² -> cada corrida quedaba al
+# borde del timeout (una búsqueda de ~500 km de diagonal tardó 654s reales,
+# midiéndolo directo contra el backend sin nginx). Ninguna repetidora VHF real
+# cubre 100 km: estirar el radio hasta ahí no sumaba información, solo compraba
+# minutos de cómputo. Con este tope, además, el score pasa a medir algo más
+# honesto: cobertura dentro del alcance real de una repetidora, no un radio
+# artificial. Los objetivos que quedan fuera del bbox resultante ya se cuentan
+# como no cubiertos (`_pct_cubierto`), así que bajar este número es seguro.
+RADIO_REFINAR_MAX_KM = 50.0
 RES_REFINAR = 600  # resolución más baja que el default VHF: 3 corridas, no 1
 
 
@@ -262,10 +285,14 @@ def _score_los(
 # Refinamiento con el motor real (ITM) + medición de cobertura real
 # --------------------------------------------------------------------------- #
 def _radio_para_cubrir(cand_lat: float, cand_lon: float, objetivos: list[tuple[float, float]]) -> float:
-    """Radio (km) mínimo para que el bbox CUADRADO centrado en el candidato
-    (mismo criterio que `dem.bbox_from_center`) contenga a todos los objetivos.
+    """Radio (km) para el refinamiento ITM: alcanza al objetivo más lejano,
+    pero nunca más de RADIO_REFINAR_MAX_KM (ver constante). Con perímetros
+    grandes, el candidato no llega a cubrir los objetivos más lejanos —quedan
+    fuera del bbox del overlay, y `_pct_cubierto` ya los cuenta como no
+    cubiertos, así que el score sigue siendo correcto.
 
-    Distancia Chebyshev (no Euclídea): el bbox es un cuadrado, no un círculo.
+    Distancia Chebyshev (no Euclídea): el bbox es un cuadrado, no un círculo
+    (mismo criterio que `dem.bbox_from_center`).
     """
     max_lado = 0.0
     for lat, lon in objetivos:
@@ -273,14 +300,21 @@ def _radio_para_cubrir(cand_lat: float, cand_lon: float, objetivos: list[tuple[f
         dy_km = abs(lat - cand_lat) * KM_POR_GRADO_LAT
         max_lado = max(max_lado, dx_km, dy_km)
     radio = max_lado * 1.15 + 2.0  # margen para el borde del bbox + holgura
-    return min(max(radio, RADIO_REFINAR_MIN_KM), settings.coverage_max_radius_km)
+    tope = min(RADIO_REFINAR_MAX_KM, settings.coverage_max_radius_km)
+    return min(max(radio, RADIO_REFINAR_MIN_KM), tope)
 
 
 def _pct_cubierto(png: bytes, bbox: "dem.Bbox", objetivos: list[tuple[float, float]]) -> float:
     """% de `objetivos` que caen en zona con señal del overlay (alpha > 0).
 
     Mismo criterio que pinta el overlay en el frontend: `coverage._ppm_to_png`
-    deja alpha=0 donde no hay cobertura.
+    deja alpha=0 donde no hay cobertura. El radio de refinamiento se clipea a
+    `RADIO_REFINAR_MAX_KM` (`_radio_para_cubrir`): con un perímetro más ancho
+    que ese tope, el overlay NO llega a cubrir todo el polígono (a propósito:
+    ver el comentario de la constante). Un objetivo fuera del bbox del overlay
+    está, por definición, sin señal: NO hay que recortarlo (clamp) al borde del
+    raster, porque el borde puede tener señal y contarlo como "cubierto" sería
+    falso.
     """
     if not objetivos:
         return 0.0
@@ -294,6 +328,8 @@ def _pct_cubierto(png: bytes, bbox: "dem.Bbox", objetivos: list[tuple[float, flo
 
     cubiertos = 0
     for lat, lon in objetivos:
+        if not (west <= lon <= east and south <= lat <= north):
+            continue  # fuera del área calculada: no cubierto, no se cuenta
         col = int((lon - west) / ancho_grados * width) if ancho_grados else 0
         row = int((north - lat) / alto_grados * height) if alto_grados else 0
         col = min(max(col, 0), width - 1)
