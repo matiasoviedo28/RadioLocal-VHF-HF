@@ -1070,3 +1070,121 @@ html, body {
   color: #b71c1c;
   font-weight: 600;
 }
+
+/* ==========================================================================
+   MODO "MEJOR UBICACIÓN" — dibujo de perímetro + búsqueda del mejor punto
+   (TODO ADITIVO, mismo look que los demás paneles)
+   ========================================================================== */
+#panel-mejor {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  z-index: 9;
+  width: 250px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  display: none;
+}
+
+#panel-mejor.visible {
+  display: block;
+}
+
+#panel-mejor h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: #b71c1c;
+}
+
+#panel-mejor .ayuda {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+#mejor-contador {
+  font-weight: 600;
+  color: #333;
+}
+
+#panel-mejor .campo {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#panel-mejor label {
+  font-size: 0.72rem;
+  color: #333;
+  white-space: nowrap;
+}
+
+#panel-mejor input {
+  width: 5ch;
+  min-width: 3ch;
+  max-width: 12ch;
+  box-sizing: content-box;
+  padding: 3px 4px;
+  font-size: 0.78rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+/* Botones "Cerrar área" / "Reiniciar": lado a lado, secundarios */
+.mejor-acciones-dibujo {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mejor-acciones-dibujo button {
+  flex: 1;
+  padding: 6px 4px;
+  border: 1px solid #b71c1c;
+  border-radius: 4px;
+  background: #fff;
+  color: #b71c1c;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mejor-acciones-dibujo button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#mejor-calcular {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px;
+  border: none;
+  border-radius: 4px;
+  background: #b71c1c;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#mejor-calcular:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mejor-resultado {
+  margin: 10px 0 0;
+  padding: 7px 9px;
+  font-size: 0.78rem;
+  color: #1b5e20;
+  background: #eaf6ea;
+  border: 1px solid #c8e6c9;
+  border-radius: 4px;
+  line-height: 1.4;
+}

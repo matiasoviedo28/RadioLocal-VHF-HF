@@ -30,6 +30,7 @@
     <div id="modo-toggle" role="tablist" aria-label="Modo de cobertura">
       <button id="modo-vhf" type="button" class="activo" role="tab" aria-selected="true">VHF</button>
       <button id="modo-hf" type="button" role="tab" aria-selected="false">HF</button>
+      <button id="modo-mejor" type="button" role="tab" aria-selected="false">Mejor ubicación</button>
     </div>
 
     <!--
@@ -243,6 +244,62 @@
       <p class="hf-nota">La baja fiabilidad cerca del transmisor en ciertas bandas/horas es normal (zona de silencio), no un error.</p>
       <p id="hf-ssn-fuente" class="hf-mini"></p>
     </div>
+  </div>
+
+  <!--
+    Panel "Mejor ubicación" (ADITIVO, oculto por defecto). Espeja el estilo de
+    los otros paneles. El mapa entra en "modo dibujo": click agrega un vértice
+    del perímetro en vez de ubicar un Tx. Usa relieve/DEM igual que VHF (a
+    diferencia de HF), así que "Relieve" y "Descargar zona" quedan visibles.
+  -->
+  <div id="panel-mejor">
+    <h3>Mejor ubicación</h3>
+    <p class="ayuda">
+      Dibujá el perímetro de la zona que querés cubrir: click en el mapa para
+      agregar puntos. Con 3 o más puntos, cerrá el área (o directo "Buscar
+      mejor ubicación": si no la cerraste, se cierra sola).
+    </p>
+    <p id="mejor-contador" class="ayuda">Puntos dibujados: 0</p>
+
+    <div class="mejor-acciones-dibujo">
+      <button id="mejor-cerrar" type="button" disabled>Cerrar área</button>
+      <button id="mejor-reiniciar" type="button" disabled>Reiniciar</button>
+    </div>
+
+    <div class="campo">
+      <label>Tx h (m)
+        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" aria-hidden="true">Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
+      </label>
+      <input id="mejor-txh" type="number" value="10" />
+    </div>
+    <div class="campo">
+      <label>Rx h (m)
+        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
+      </label>
+      <input id="mejor-rxh" type="number" value="2" />
+    </div>
+    <div class="campo">
+      <label>ERP (W)
+        <span class="info" tabindex="0" role="img" aria-label="Potencia radiada efectiva (ERP) en watts. Ej: 25">i<span class="tip" aria-hidden="true">Potencia radiada efectiva (ERP) en watts. Ej: 25</span></span>
+      </label>
+      <input id="mejor-erp" type="number" value="25" />
+    </div>
+    <div class="campo">
+      <label>Frec (MHz)
+        <span class="info" tabindex="0" role="img" aria-label="Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)">i<span class="tip" aria-hidden="true">Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)</span></span>
+      </label>
+      <input id="mejor-f" type="number" value="150" />
+    </div>
+    <div class="campo">
+      <label>Umbral (dBm)
+        <span class="info" tabindex="0" role="img" aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100">i<span class="tip" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100</span></span>
+      </label>
+      <input id="mejor-rt" type="number" value="-80" />
+    </div>
+
+    <button id="mejor-calcular" type="button" disabled>Buscar mejor ubicación</button>
+
+    <p id="mejor-resultado" class="mejor-resultado" hidden></p>
   </div>
 
   <!--

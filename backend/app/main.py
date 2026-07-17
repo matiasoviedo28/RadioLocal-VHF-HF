@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import (
+    best_site,
     config,
     coverage,
     coverages,
@@ -56,3 +57,6 @@ app.include_router(coverages.router)
 
 # Fase HF: motor de propagación HF (ITU-R P.533, cobertura de área).
 app.include_router(hf_coverage.router)
+
+# "Mejor ubicación": dado un perímetro, busca el mejor punto para una repetidora.
+app.include_router(best_site.router)

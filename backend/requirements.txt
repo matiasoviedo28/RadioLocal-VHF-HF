@@ -11,6 +11,7 @@ rio-cogeo==5.4.1
 numpy==2.2.1
 httpx==0.28.1
 
-# --- Fase 2 (motor RF): se sumarán cuando corresponda ---
-# pyproj
-# shapely
+# --- Mejor ubicación (búsqueda de punto óptimo sobre un perímetro) ---
+# shapely trae GEOS embebido en sus wheels manylinux, igual que rasterio con GDAL:
+# no hace falta instalar GEOS del sistema.
+shapely==2.0.6

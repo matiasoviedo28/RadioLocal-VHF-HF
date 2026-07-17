@@ -188,6 +188,40 @@ SSN auto con procedencia, Avanzado plegado con override de SSN/ruido) y se dibuj
   del disco). Ambos responden con `Content-Disposition` (nombre basado en la
   cobertura).
 
+### "Mejor ubicación" — búsqueda del mejor punto para una repetidora *(implementado)*
+Problema inverso a la cobertura VHF: el usuario dibuja un **perímetro** (la zona
+que quiere cubrir) y el sistema busca las coordenadas que la cubren mejor. Clave
+en terreno montañoso: el mejor punto suele ser un cerro, no el centroide del área.
+
+- **Servicio:** `backend/app/services/best_site.py` — función pura `find_best_site`
+  (mismo patrón que `coverage.py`: sin FastAPI, pensada para mover a worker). Dos
+  etapas:
+  1. **Barrido rápido:** grilla de candidatos dentro del polígono **+ un anillo de
+     buffer alrededor** (en terreno montañoso el mejor sitio suele estar fuera del
+     valle a cubrir). Cada candidato se puntúa por **line-of-sight geométrico**
+     (con curvatura terrestre, k=4/3) contra una muestra de puntos del polígono,
+     usando `dem.read_mosaic` directo (sin correr el motor RF). Heurística rápida,
+     no modela difracción.
+  2. **Refinamiento:** a los 3 candidatos mejor puntuados se les corre el motor
+     real (`coverage.run_coverage`, Signal-Server/ITM) y se elige el que cubre más
+     % real del polígono (medido sobre el PNG resultante, banda alpha). Reusa el
+     motor VHF tal cual: no agrega ningún modelo de propagación nuevo.
+- **Endpoint:** `POST /api/best-site` — body: perímetro (`poligono`, ≥3 puntos
+  lat/lon) + parámetros del transmisor (mismos campos que `/api/coverage`).
+  Responde **PNG** (overlay del punto ganador) + `X-Bbox` + `X-Best-Lat/Lon/Score`.
+  Mismo contrato de errores que `/api/coverage` (**409** con `bbox`/`missing` si
+  falta DEM del área de búsqueda, **422** si el polígono es inválido o su tamaño
+  no entra en el rango soportado ~0.5–60 km de diagonal).
+- **Frontend:** tercer modo en el toggle de la topbar (`VHF | HF | Mejor
+  ubicación`). El mapa entra en "modo dibujo": click agrega un vértice; clickear
+  cerca del primer punto (o el botón "Cerrar área") cierra el perímetro; "Buscar
+  mejor ubicación" cierra automáticamente si el usuario no lo hizo a mano. Usa
+  relieve/DEM igual que VHF (a diferencia de HF): "Relieve" y "Descargar zona"
+  quedan disponibles. El resultado se marca con un pin verde + el overlay de
+  cobertura real del punto elegido.
+- **Geometría:** `shapely` (antes comentado en `requirements.txt` a la espera de
+  este momento) para el polígono, buffers y el filtro de candidatos/objetivos.
+
 ### Relieve — Copernicus GLO-30 *(Fase 1 — implementado)*
 - **Fuente (configurable, `settings.dem_source`):**
   - **`"s3"` (default):** bucket público de Copernicus GLO-30 en AWS
@@ -263,5 +297,6 @@ SSN auto con procedencia, Avanzado plegado con override de SSN/ruido) y se dibuj
 | 8 | Motor RF (Fase 2): fork W3AXL/Signal-Server, binario LIDAR (`-lid`), commit fijado, build multi-stage. |
 | 9 | Cobertura síncrona en el backend por ahora; `coverage.py` aislado para mover a worker. |
 | 10 | Exportación a Google Earth como KMZ autocontenido (`zipfile`, sin libs extra), reusando el PNG/bbox ya calculado (sin recomputar). |
+| 11 | "Mejor ubicación": barrido LOS heurístico (rápido, sin motor RF) + refinamiento con el motor real (ITM) sobre los mejores candidatos. Candidatos permitidos fuera del polígono (buffer), no solo adentro. |
 
 El roadmap por fases está en [../CLAUDE.md](../CLAUDE.md).

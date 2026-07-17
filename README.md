@@ -66,6 +66,19 @@ Trabaja en **dos modos**:
 
 ![Cálculo de cobertura VHF](docs/gif/VHF.gif)
 
+- **Mejor ubicación**: dibujá en el mapa el perímetro de la zona que querés cubrir
+  (click para agregar puntos; se cierra solo si no lo cerrás a mano) y la
+  herramienta busca las coordenadas que mejor la cubren. Corre en dos etapas: un
+  barrido rápido por line-of-sight sobre el relieve real (que además busca en un
+  anillo alrededor del perímetro, porque en terreno montañoso el mejor punto suele
+  ser un cerro fuera del valle a cubrir) y un refinamiento con el motor VHF real
+  sobre los candidatos con mejor puntaje. El resultado se marca en el mapa junto
+  con su cobertura.
+
+![Dibujar el perímetro a cubrir](docs/gif/dibujar.gif)
+
+![Perímetro dibujado, listo para calcular](docs/img/jurisdiccion.png)
+
 - **Cálculo de cobertura HF** con **ITURHFProp** (implementación de referencia de la
   **ITU-R P.533**), también **100% local**. Mapa de **área** con la fiabilidad del
   circuito por **banda** (80–10 m, o frecuencia libre), **mes** y **hora (UTC)**, con

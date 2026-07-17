@@ -398,10 +398,12 @@ function fijarTx(lat, lon) {
   invalidarCobertura();
 }
 
-// Click = ubicar Tx. Ruteo por modo: en HF va al Tx del panel HF, en VHF al de
-// siempre (ruta VHF idéntica cuando modoActual === 'vhf').
+// Click = ubicar Tx. Ruteo por modo: en HF va al Tx del panel HF, en "mejor
+// ubicación" agrega un vértice del perímetro que se está dibujando, en VHF al
+// Tx de siempre (ruta VHF idéntica cuando modoActual === 'vhf').
 map.on("click", (ev) => {
   if (modoActual === "hf") fijarTxHF(ev.lngLat.lat, ev.lngLat.lng);
+  else if (modoActual === "mejor") agregarPuntoPoligono(ev.lngLat.lat, ev.lngLat.lng);
   else fijarTx(ev.lngLat.lat, ev.lngLat.lng);
 });
 map.on("zoom", actualizarControles);
@@ -1339,11 +1341,12 @@ if (!localStorage.getItem(TOUR_FLAG)) {
 const SRC_HF = "hf-src";
 const LAYER_HF = "hf-layer";
 
-let modoActual = "vhf"; // 'vhf' | 'hf'
+let modoActual = "vhf"; // 'vhf' | 'hf' | 'mejor'
 let txMarkerHF = null; // marcador del Tx en modo HF (separado del de VHF)
 
 const btnModoVHF = document.getElementById("modo-vhf");
 const btnModoHF = document.getElementById("modo-hf");
+const btnModoMejor = document.getElementById("modo-mejor");
 const panelHF = document.getElementById("panel-hf");
 const btnOfflineTop = document.getElementById("btn-offline");
 const hfLat = document.getElementById("hf-lat");
@@ -1464,18 +1467,34 @@ function etiquetaFuenteSSN(source) {
 
 hfMes.addEventListener("change", cargarSSN);
 
-// --- Toggle de modo VHF | HF ---
+// --- Toggle de modo VHF | HF | Mejor ubicación ---
 function setModo(modo) {
   if (modo === modoActual) return;
+  const anterior = modoActual;
   modoActual = modo;
 
-  const esHF = modo === "hf";
-  btnModoVHF.classList.toggle("activo", !esHF);
-  btnModoHF.classList.toggle("activo", esHF);
-  btnModoVHF.setAttribute("aria-selected", String(!esHF));
-  btnModoHF.setAttribute("aria-selected", String(esHF));
+  btnModoVHF.classList.toggle("activo", modo === "vhf");
+  btnModoHF.classList.toggle("activo", modo === "hf");
+  btnModoMejor.classList.toggle("activo", modo === "mejor");
+  btnModoVHF.setAttribute("aria-selected", String(modo === "vhf"));
+  btnModoHF.setAttribute("aria-selected", String(modo === "hf"));
+  btnModoMejor.setAttribute("aria-selected", String(modo === "mejor"));
 
-  if (esHF) {
+  // Salir del modo anterior: cada modo limpia SOLO lo suyo (no se mezclan overlays).
+  if (anterior === "hf") {
+    panelHF.classList.remove("visible");
+    quitarOverlay(SRC_HF, LAYER_HF);
+  } else if (anterior === "mejor") {
+    panelMejor.classList.remove("visible");
+    salirModoDibujo();
+  } else {
+    panel.classList.remove("visible");
+    quitarOverlay(SRC_COBERTURA, LAYER_COBERTURA);
+  }
+
+  setEstado("");
+
+  if (modo === "hf") {
     // Apagar relieve si estaba activo (HF no usa DEM) y ocultar sus botones.
     if (relieveActivo) {
       quitarOverlay(SRC_RELIEVE, LAYER_RELIEVE);
@@ -1486,29 +1505,30 @@ function setModo(modo) {
     btnRelieve.hidden = true;
     btnOfflineTop.hidden = true;
     panelOffline.classList.remove("visible");
-    // Cambiar de panel y limpiar el overlay VHF (no se mezclan modos).
-    panel.classList.remove("visible");
     panelHF.classList.add("visible");
-    quitarOverlay(SRC_COBERTURA, LAYER_COBERTURA);
-    setEstado("");
     // HF cubre miles de km: si el zoom está muy cerrado, alejamos suave.
     if (map.getZoom() > 6) map.easeTo({ zoom: 5, duration: 600 });
     cargarSSN();
     actualizarControlesHF();
-  } else {
-    // Volver a VHF: restaurar todo lo de VHF, limpiar overlay HF.
+  } else if (modo === "mejor") {
+    // Usa relieve/DEM igual que VHF (a diferencia de HF): Relieve/Descargar
+    // zona siguen disponibles.
     btnRelieve.hidden = false;
     btnOfflineTop.hidden = false;
-    panelHF.classList.remove("visible");
+    panelMejor.classList.add("visible");
+    entrarModoDibujo();
+  } else {
+    // Volver a VHF.
+    btnRelieve.hidden = false;
+    btnOfflineTop.hidden = false;
     panel.classList.add("visible");
-    quitarOverlay(SRC_HF, LAYER_HF);
-    setEstado("");
     actualizarControles();
   }
 }
 
 btnModoVHF.addEventListener("click", () => setModo("vhf"));
 btnModoHF.addEventListener("click", () => setModo("hf"));
+btnModoMejor.addEventListener("click", () => setModo("mejor"));
 
 // --- Cálculo de cobertura HF ---
 hfCalcular.addEventListener("click", async () => {
@@ -1575,5 +1595,286 @@ hfCalcular.addEventListener("click", async () => {
   } finally {
     setOcupado(false);
     actualizarControlesHF();
+  }
+});
+
+// ==========================================================================
+// MODO "MEJOR UBICACIÓN" — dibujar un perímetro y buscar el mejor punto para
+// una repetidora (TODO ADITIVO). Usa relieve/DEM igual que VHF: a diferencia
+// de HF, "Relieve" y "Descargar zona" quedan disponibles en este modo.
+//
+// El mapa entra en "modo dibujo": cada click agrega un vértice. Cerrar el
+// área es explícito ("Cerrar área", o clickear cerca del primer punto) pero
+// también automático: "Buscar mejor ubicación" cierra el perímetro solo si el
+// usuario no lo cerró a mano (con 3+ puntos alcanza para calcular el área).
+// ==========================================================================
+const SRC_MEJOR_FORMA = "mejor-forma-src";
+const LAYER_MEJOR_RELLENO = "mejor-forma-relleno";
+const LAYER_MEJOR_LINEA = "mejor-forma-linea";
+const SRC_MEJOR_PUNTOS = "mejor-puntos-src";
+const LAYER_MEJOR_PUNTOS = "mejor-puntos-layer";
+const SRC_MEJOR = "mejor-cobertura-src";
+const LAYER_MEJOR = "mejor-cobertura-layer";
+
+const UMBRAL_CIERRE_PX = 12; // click a esta distancia (px) del primer punto = cerrar
+
+const panelMejor = document.getElementById("panel-mejor");
+const mejorContador = document.getElementById("mejor-contador");
+const mejorCerrar = document.getElementById("mejor-cerrar");
+const mejorReiniciar = document.getElementById("mejor-reiniciar");
+const mejorCalcular = document.getElementById("mejor-calcular");
+const mejorResultadoTxt = document.getElementById("mejor-resultado");
+
+let puntosPoligono = []; // [[lat, lon], ...] en el orden en que se dibujaron
+let poligonoCerrado = false;
+let mejorMarker = null;
+
+// --- Dibujo del perímetro en el mapa (GeoJSON, aditivo) ---------------------
+function formaGeoJSON() {
+  const coords = puntosPoligono.map(([lat, lon]) => [lon, lat]);
+  if (coords.length < 2) return { type: "FeatureCollection", features: [] };
+  // Cerrado -> Polygon (la capa "fill" solo pinta geometría de polígono, la
+  // capa "line" dibuja igual el contorno). Abierto -> LineString (solo el trazo).
+  const geometry =
+    poligonoCerrado && coords.length >= 3
+      ? { type: "Polygon", coordinates: [[...coords, coords[0]]] }
+      : { type: "LineString", coordinates: coords };
+  return { type: "FeatureCollection", features: [{ type: "Feature", geometry, properties: {} }] };
+}
+
+function puntosGeoJSON() {
+  return {
+    type: "FeatureCollection",
+    features: puntosPoligono.map(([lat, lon]) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: {},
+    })),
+  };
+}
+
+function pintarDibujo() {
+  const forma = formaGeoJSON();
+  const srcForma = map.getSource(SRC_MEJOR_FORMA);
+  if (srcForma) {
+    srcForma.setData(forma);
+  } else {
+    map.addSource(SRC_MEJOR_FORMA, { type: "geojson", data: forma });
+    map.addLayer({
+      id: LAYER_MEJOR_RELLENO,
+      type: "fill",
+      source: SRC_MEJOR_FORMA,
+      paint: { "fill-color": "#b71c1c", "fill-opacity": 0.15 },
+    });
+    map.addLayer({
+      id: LAYER_MEJOR_LINEA,
+      type: "line",
+      source: SRC_MEJOR_FORMA,
+      paint: { "line-color": "#b71c1c", "line-width": 2, "line-dasharray": [2, 1] },
+    });
+  }
+
+  const puntos = puntosGeoJSON();
+  const srcPuntos = map.getSource(SRC_MEJOR_PUNTOS);
+  if (srcPuntos) {
+    srcPuntos.setData(puntos);
+  } else {
+    map.addSource(SRC_MEJOR_PUNTOS, { type: "geojson", data: puntos });
+    map.addLayer({
+      id: LAYER_MEJOR_PUNTOS,
+      type: "circle",
+      source: SRC_MEJOR_PUNTOS,
+      paint: {
+        "circle-radius": 5,
+        "circle-color": "#fff",
+        "circle-stroke-color": "#b71c1c",
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+}
+
+function quitarDibujo() {
+  if (map.getLayer(LAYER_MEJOR_PUNTOS)) map.removeLayer(LAYER_MEJOR_PUNTOS);
+  if (map.getSource(SRC_MEJOR_PUNTOS)) map.removeSource(SRC_MEJOR_PUNTOS);
+  if (map.getLayer(LAYER_MEJOR_LINEA)) map.removeLayer(LAYER_MEJOR_LINEA);
+  if (map.getLayer(LAYER_MEJOR_RELLENO)) map.removeLayer(LAYER_MEJOR_RELLENO);
+  if (map.getSource(SRC_MEJOR_FORMA)) map.removeSource(SRC_MEJOR_FORMA);
+}
+
+function colocarMarcadorMejor(lat, lon) {
+  if (mejorMarker) {
+    mejorMarker.setLngLat([lon, lat]);
+  } else {
+    mejorMarker = new maplibregl.Marker({ color: "#1a9850" }).setLngLat([lon, lat]).addTo(map);
+  }
+}
+
+function quitarMarcadorMejor() {
+  if (mejorMarker) {
+    mejorMarker.remove();
+    mejorMarker = null;
+  }
+}
+
+// --- Estado de los controles del panel --------------------------------------
+function actualizarControlesMejor() {
+  mejorContador.textContent = `Puntos dibujados: ${puntosPoligono.length}`;
+  mejorCerrar.disabled = ocupado || poligonoCerrado || puntosPoligono.length < 3;
+  mejorReiniciar.disabled = ocupado || puntosPoligono.length === 0;
+  mejorCalcular.disabled = ocupado || puntosPoligono.length < 3;
+}
+
+// --- Agregar/cerrar/reiniciar el perímetro -----------------------------------
+function agregarPuntoPoligono(lat, lon) {
+  if (poligonoCerrado) return; // ya cerrado: "Reiniciar" para dibujar de nuevo
+
+  // Click cerca del primer punto (con 3+ puntos ya puestos) = cerrar el área,
+  // igual que la mayoría de las herramientas de dibujo de polígonos.
+  if (puntosPoligono.length >= 3) {
+    const primero = map.project([puntosPoligono[0][1], puntosPoligono[0][0]]);
+    const clic = map.project([lon, lat]);
+    if (Math.hypot(primero.x - clic.x, primero.y - clic.y) <= UMBRAL_CIERRE_PX) {
+      cerrarPoligono();
+      return;
+    }
+  }
+
+  puntosPoligono.push([lat, lon]);
+  pintarDibujo();
+  actualizarControlesMejor();
+}
+
+function cerrarPoligono() {
+  if (poligonoCerrado || puntosPoligono.length < 3) return;
+  poligonoCerrado = true;
+  pintarDibujo();
+  actualizarControlesMejor();
+}
+
+function reiniciarDibujo() {
+  puntosPoligono = [];
+  poligonoCerrado = false;
+  quitarMarcadorMejor();
+  quitarOverlay(SRC_MEJOR, LAYER_MEJOR);
+  mejorResultadoTxt.hidden = true;
+  pintarDibujo();
+  actualizarControlesMejor();
+}
+
+function entrarModoDibujo() {
+  puntosPoligono = [];
+  poligonoCerrado = false;
+  map.doubleClickZoom.disable(); // clicks seguidos para poner puntos, sin zoom accidental
+  pintarDibujo();
+  actualizarControlesMejor();
+}
+
+function salirModoDibujo() {
+  map.doubleClickZoom.enable();
+  quitarDibujo();
+  quitarMarcadorMejor();
+  quitarOverlay(SRC_MEJOR, LAYER_MEJOR);
+  puntosPoligono = [];
+  poligonoCerrado = false;
+  mejorResultadoTxt.hidden = true;
+}
+
+mejorCerrar.addEventListener("click", () => {
+  if (ocupado) return;
+  cerrarPoligono();
+});
+mejorReiniciar.addEventListener("click", () => {
+  if (ocupado) return;
+  reiniciarDibujo();
+});
+
+// --- Cálculo: busca el mejor punto para cubrir el perímetro -----------------
+function pedirMejorUbicacion(body) {
+  return fetch("/api/best-site", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+mejorCalcular.addEventListener("click", async () => {
+  if (ocupado || mejorCalcular.disabled) return;
+
+  // Si el usuario no cerró el área a mano, la cerramos nosotros: alcanza con
+  // 3+ puntos para calcular (no hace falta que haya clickeado el primer punto).
+  if (!poligonoCerrado) cerrarPoligono();
+  if (puntosPoligono.length < 3) {
+    setEstado("Dibujá al menos 3 puntos para definir el área.", true);
+    return;
+  }
+
+  const body = {
+    poligono: puntosPoligono.map(([lat, lon]) => ({ lat, lon })),
+    txh: parseFloat(document.getElementById("mejor-txh").value),
+    erp: parseFloat(document.getElementById("mejor-erp").value),
+    f: parseFloat(document.getElementById("mejor-f").value),
+    rxh: parseFloat(document.getElementById("mejor-rxh").value),
+    rt: parseFloat(document.getElementById("mejor-rt").value),
+  };
+
+  setOcupado(true, "Buscando el mejor punto (corre varias cobertura de prueba, puede tardar)…");
+  try {
+    let resp = await pedirMejorUbicacion(body);
+
+    // 409 con bbox del área de búsqueda (polígono + margen): mismo flujo que
+    // VHF, ofrecemos preparar exactamente esa zona (no el viewport).
+    if (resp.status === 409) {
+      const detalle = await leerDetalle(resp);
+      if (detalle && detalle.bbox) {
+        const nTiles = tilesEnBbox(detalle.bbox);
+        if (nTiles > MAX_TILES_PREPARAR) {
+          throw new Error(
+            `El área de búsqueda abarca ${nTiles} tiles (máx. ${MAX_TILES_PREPARAR}). Dibujá un perímetro más chico.`
+          );
+        }
+        const faltan = (detalle.missing || []).length;
+        const gb = (nTiles * 0.054).toFixed(1);
+        const msg =
+          nTiles > AVISO_TILES_PREPARAR
+            ? `La zona de esta búsqueda no está preparada (faltan ${faltan} tile/s).\n\n` +
+              `Vas a descargar ~${nTiles} tiles (~${gb} GB), puede tardar. ¿Continuar?`
+            : `La zona de esta búsqueda no está preparada (faltan ${faltan} tile/s).\n\n` +
+              `¿Preparar el área ahora (${nTiles} tile/s, requiere internet)?`;
+        if (confirm(msg)) {
+          setEstado(`Preparando el área de búsqueda: ${nTiles} tile(s)…`);
+          await prepararZona(detalle.bbox);
+          setEstado("Buscando el mejor punto…");
+          resp = await pedirMejorUbicacion(body); // reintento una vez
+        } else {
+          throw new Error("Zona no preparada.");
+        }
+      }
+    }
+
+    if (!resp.ok) throw new Error(await mensajeDeError(resp));
+
+    const bbox = bboxDeHeader(resp, bboxViewport());
+    const blob = await resp.blob();
+    agregarOverlayRaster(SRC_MEJOR, LAYER_MEJOR, blob, bbox, 0.6);
+
+    const lat = parseFloat(resp.headers.get("X-Best-Lat"));
+    const lon = parseFloat(resp.headers.get("X-Best-Lon"));
+    const score = resp.headers.get("X-Best-Score");
+    colocarMarcadorMejor(lat, lon);
+
+    mejorResultadoTxt.textContent =
+      `Mejor punto: ${lat.toFixed(5)}, ${lon.toFixed(5)} · cubre ~${score}% del área dibujada.`;
+    mejorResultadoTxt.hidden = false;
+
+    // Encuadre automático sobre el área calculada (mismo criterio que HF).
+    map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 40, duration: 700 });
+    setEstado("");
+  } catch (e) {
+    console.error(e);
+    setEstado("Mejor ubicación: " + e.message, true);
+  } finally {
+    setOcupado(false);
+    actualizarControlesMejor();
   }
 });
