@@ -111,8 +111,12 @@ COPY --from=builder-hf /opt/hf/data/          /opt/hf/data/
 RUN ldconfig
 
 # Instalar dependencias Python primero para aprovechar la caché de capas.
+# --timeout 120: el default de pip (15s por lectura de socket) corta wheels
+# grandes (rasterio trae GDAL embebido, ~22 MB) en conexiones lentas/inestables
+# a mitad de descarga (ReadTimeoutError contra files.pythonhosted.org). Con más
+# margen por intento alcanza incluso con hiccups momentáneos de red.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 120 -r requirements.txt
 
 # Copiar el código de la aplicación
 COPY app ./app
