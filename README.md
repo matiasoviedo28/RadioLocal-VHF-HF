@@ -12,8 +12,9 @@
 [![MapLibre](https://img.shields.io/badge/MapLibre%20GL-4.7-396cb2?logo=maplibre&logoColor=white)](https://maplibre.org/)
 [![Copernicus GLO-30](https://img.shields.io/badge/DEM-Copernicus%20GLO--30-0b5394)](https://registry.opendata.aws/copernicus-dem/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Versión](https://img.shields.io/badge/versi%C3%B3n-1.2.1-b71c1c)](https://github.com/matiasoviedo28/RadioLocal-VHF-HF)
+[![Versión](https://img.shields.io/badge/versi%C3%B3n-1.3.3-b71c1c)](https://github.com/matiasoviedo28/RadioLocal-VHF-HF)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Tutorial en YouTube](https://img.shields.io/badge/YouTube-Tutorial-FF0000?logo=youtube&logoColor=white)](https://youtu.be/LfRk-zBDxqQ)
 
 Herramienta para **planificar la cobertura de radio VHF y HF**, corriendo en tu
 propia máquina, con una interfaz simple e intuitiva. Pensada tanto para **servicios
@@ -219,6 +220,11 @@ ya tenés disponibles offline, resaltadas sobre el mapa:
   **Probado en el campo y comparado con mediciones reales.**
 - **1.2.1** — Base HF: cobertura de área HF (ITU-R P.533) por banda, mes y hora,
   con SSN automático de NOAA y alcance seleccionable (regional / continental / DX).
+- **1.3.3** — Mejor ubicación: dibujás el perímetro de la zona a cubrir y la
+  herramienta busca el mejor punto para una repetidora (barrido por line-of-sight
+  + refinamiento con el motor VHF real). Lanzador para Windows (`INICIAR.bat` /
+  `APAGAR.bat`, sin usar la consola) con diagnóstico de virtualización desactivada
+  en la BIOS.
 
 ---
 
