@@ -128,6 +128,9 @@ Trabaja en **dos modos**:
 
 ## Cómo levantar el proyecto
 
+> 📺 **¿Preferís verlo en video?** Tutorial completo paso a paso (Windows, sin necesitar
+> saber programar): https://youtu.be/LfRk-zBDxqQ
+
 1. **Cloná el repositorio:**
 
    ```bash
