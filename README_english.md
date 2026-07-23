@@ -14,7 +14,7 @@
 [![MapLibre](https://img.shields.io/badge/MapLibre%20GL-4.7-396cb2?logo=maplibre&logoColor=white)](https://maplibre.org/)
 [![Copernicus GLO-30](https://img.shields.io/badge/DEM-Copernicus%20GLO--30-0b5394)](https://registry.opendata.aws/copernicus-dem/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Version](https://img.shields.io/badge/version-1.3.3-b71c1c)](https://github.com/matiasoviedo28/RadioLocal-VHF-HF)
+[![Version](https://img.shields.io/badge/version-1.3.4-b71c1c)](https://github.com/matiasoviedo28/RadioLocal-VHF-HF)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![YouTube Tutorial](https://img.shields.io/badge/YouTube-Tutorial-FF0000?logo=youtube&logoColor=white)](https://youtu.be/LfRk-zBDxqQ)
 
@@ -228,7 +228,7 @@ offline, highlighted on the map:
 - **1.2.1** — HF baseline: HF area coverage (ITU-R P.533) by band, month, and
   hour, with automatic SSN from NOAA and a selectable range (regional /
   continental / DX).
-- **1.3.3** — Best Site: draw the perimeter of the area you want to cover and the
+- **1.3.4** — Best Site: draw the perimeter of the area you want to cover and the
   tool finds the best spot for a repeater (line-of-sight sweep + refinement with
   the real VHF engine). Windows launcher (`INICIAR.bat` / `APAGAR.bat`, no command
   line needed) with a diagnostic for virtualization disabled in the BIOS.

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Identidad de la aplicación
     app_name: str = "RadioLocal-VHF-HF"
-    app_version: str = "1.3.3"  # 1.3.3: Mejor ubicación + lanzador Windows
+    app_version: str = "1.3.4"  # 1.3.4: Mejor ubicación + lanzador Windows + selector de idioma
 
     # Entorno de ejecución: "dev" | "prod"
     env: str = "dev"
