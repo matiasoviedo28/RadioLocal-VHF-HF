@@ -4,6 +4,8 @@
 
 # RadioLocal-VHF-HF
 
+*This document is also available in English: [README_english.md](README_english.md).*
+
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![rasterio](https://img.shields.io/badge/rasterio-GDAL-5a9fd4?logo=python&logoColor=white)](https://rasterio.readthedocs.io/)
