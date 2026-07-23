@@ -96,6 +96,61 @@ html, body {
   cursor: not-allowed;
 }
 
+/* --------------------------------------------------------------------------
+   Selector de idioma: botón + mini-menú al lado del botón de ayuda ("?").
+   El botón muestra el idioma activo (🌐 ES/EN/ZH); por eso NO usa el círculo
+   fijo 28x28 de .btn-icono (que solo entra bien con un solo carácter como "?").
+   -------------------------------------------------------------------------- */
+.idioma-selector {
+  position: relative;
+}
+
+#topbar button.idioma-btn {
+  width: auto;
+  height: auto;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.idioma-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 120px;
+  background: #fff;
+  color: #222;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.idioma-menu[hidden] {
+  display: none;
+}
+
+.idioma-menu li {
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.idioma-menu li:hover {
+  background: #f4f4f4;
+}
+
+.idioma-menu li.seleccionado {
+  background: #b71c1c;
+  color: #fff;
+  font-weight: 600;
+}
+
 /* Spinner de actividad */
 .spinner {
   width: 16px;

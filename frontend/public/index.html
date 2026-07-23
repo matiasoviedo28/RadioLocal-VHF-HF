@@ -21,40 +21,50 @@
     <!-- Logo del proyecto (se sirve desde la raíz del sitio: frontend/public/logo.png) -->
     <img id="topbar-logo" src="logo.png" alt="Logo de RadioLocal-VHF-HF" />
     <strong>RadioLocal-VHF-HF</strong>
-    <span class="subtitulo">Planificación de cobertura de radio · Argentina</span>
+    <span class="subtitulo" data-i18n="topbar_subtitulo">Planificación de cobertura de radio · Argentina</span>
 
     <!--
       Toggle de modo VHF | HF (segmentado). Default VHF: la app se comporta
       EXACTAMENTE igual que antes. HF suma su panel/overlay encima (aditivo).
     -->
-    <div id="modo-toggle" role="tablist" aria-label="Modo de cobertura">
-      <button id="modo-vhf" type="button" class="activo" role="tab" aria-selected="true">VHF</button>
-      <button id="modo-hf" type="button" role="tab" aria-selected="false">HF</button>
-      <button id="modo-mejor" type="button" role="tab" aria-selected="false">Mejor ubicación</button>
+    <div id="modo-toggle" role="tablist" data-i18n-attrs='{"aria-label":"topbar_tablist_aria"}' aria-label="Modo de cobertura">
+      <button id="modo-vhf" type="button" class="activo" role="tab" aria-selected="true" data-i18n="modo_vhf">VHF</button>
+      <button id="modo-hf" type="button" role="tab" aria-selected="false" data-i18n="modo_hf">HF</button>
+      <button id="modo-mejor" type="button" role="tab" aria-selected="false" data-i18n="modo_mejor">Mejor ubicación</button>
     </div>
 
     <!--
       Toggle de la capa de relieve (hillshade del viewport actual). El estado
       (prendido/apagado) se muestra con la clase .activo (relleno), no con texto.
-      El title alterna "Mostrar relieve" / "Ocultar relieve" según el estado.
+      El title alterna "Mostrar relieve" / "Ocultar relieve" según el estado (JS,
+      NO vía data-i18n-attrs: ese atributo se resetearía al valor default en
+      cada cambio de idioma sin importar el estado actual).
     -->
     <button id="btn-relieve" type="button" title="Mostrar relieve">
       <!-- Ícono de montaña/relieve -->
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18L14 8l-3.5 5.5L8 10z" /></svg>
-      <span>Relieve</span>
+      <span data-i18n="relieve_label">Relieve</span>
     </button>
     <!--
       Abre/cierra el panel de descargas (oculto por defecto). Unifica el viejo
       "Preparar zona" + "Offline": baja el terreno de un área para la cobertura.
     -->
     <button id="btn-offline" type="button"
+            data-i18n-attrs='{"title":"offline_title"}'
             title="Descargá el terreno de un área para calcular cobertura, también sin internet.">
       <!-- Ícono de descarga (flecha hacia abajo) -->
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
-      <span>Descargar zona</span>
+      <span data-i18n="offline_label">Descargar zona</span>
     </button>
+    <!-- Selector de idioma: botón + mini-menú (lista poblada por i18n.js). -->
+    <div id="idioma-selector" class="idioma-selector">
+      <button id="btn-idioma" type="button" class="btn-icono idioma-btn"
+              data-i18n-attrs='{"title":"idioma_title"}' title="Cambiar idioma"
+              aria-haspopup="listbox" aria-expanded="false">🌐 ES</button>
+      <ul id="idioma-menu" class="idioma-menu" role="listbox" hidden></ul>
+    </div>
     <!-- Reabre la guía paso a paso (tour) cuando el usuario quiera -->
-    <button id="btn-ayuda" type="button" class="btn-icono" title="Abrir la guía paso a paso">?</button>
+    <button id="btn-ayuda" type="button" class="btn-icono" data-i18n-attrs='{"title":"ayuda_title"}' title="Abrir la guía paso a paso">?</button>
     <!-- Spinner + texto de estado (errores, progreso) -->
     <span id="spinner" class="spinner" hidden></span>
     <span id="estado" class="estado"></span>
@@ -65,9 +75,9 @@
 
   <!-- Panel de cobertura RF (visible desde el inicio) -->
   <div id="panel-cobertura" class="visible">
-    <h3>Cobertura VHF</h3>
-    <p class="ayuda">Click en el mapa para ubicar el transmisor.</p>
-    <p id="aviso-zoom" class="aviso" hidden>Acercá el mapa para calcular cobertura.</p>
+    <h3 data-i18n="vhf_titulo">Cobertura VHF</h3>
+    <p class="ayuda" data-i18n="vhf_ayuda">Click en el mapa para ubicar el transmisor.</p>
+    <p id="aviso-zoom" class="aviso" hidden data-i18n="vhf_aviso_zoom">Acercá el mapa para calcular cobertura.</p>
     <!--
       Cada campo lleva un ícono "i" con tooltip accesible: el texto está en
       aria-label (lectores de pantalla) y en .tip (visual, hidden para AT). El
@@ -75,69 +85,69 @@
     -->
     <!-- Un campo por línea: etiqueta (con su ícono "i") + input en el mismo renglón. -->
     <div class="campo">
-      <label>Lat
-        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      <label><span data-i18n="campo_lat">Lat</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_latlon"}' aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" data-i18n="tip_latlon" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
       </label>
       <input id="cob-lat" type="number" step="0.00001" />
     </div>
     <div class="campo">
-      <label>Lon
-        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      <label><span data-i18n="campo_lon">Lon</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_latlon"}' aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" data-i18n="tip_latlon" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
       </label>
       <input id="cob-lon" type="number" step="0.00001" />
     </div>
     <div class="campo">
-      <label>Tx h (m)
-        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" aria-hidden="true">Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
+      <label><span data-i18n="vhf_campo_txh">Tx h (m)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_txh"}' aria-label="Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" data-i18n="vhf_tip_txh" aria-hidden="true">Altura de la antena del transmisor SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
       </label>
       <input id="cob-txh" type="number" value="10" />
     </div>
     <div class="campo">
-      <label>Rx h (m)
-        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
+      <label><span data-i18n="campo_rxh">Rx h (m)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_rxh"}' aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" data-i18n="tip_rxh" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
       </label>
       <input id="cob-rxh" type="number" value="2" />
     </div>
     <div class="campo">
-      <label>ERP (W)
-        <span class="info" tabindex="0" role="img" aria-label="Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25">i<span class="tip" aria-hidden="true">Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25</span></span>
+      <label><span data-i18n="campo_erp">ERP (W)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_erp"}' aria-label="Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25">i<span class="tip" data-i18n="vhf_tip_erp" aria-hidden="true">Potencia radiada efectiva (ERP) en watts = potencia del equipo × ganancia de antena − pérdidas de línea. Si cargás solo la potencia del equipo, el cálculo es conservador. Ej: 25</span></span>
       </label>
       <input id="cob-erp" type="number" value="25" />
     </div>
     <div class="campo">
-      <label>Frec (MHz)
-        <span class="info" tabindex="0" role="img" aria-label="Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)">i<span class="tip" aria-hidden="true">Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)</span></span>
+      <label><span data-i18n="campo_frec">Frec (MHz)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_frec"}' aria-label="Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)">i<span class="tip" data-i18n="vhf_tip_frec" aria-hidden="true">Frecuencia del transmisor en MHz. Ej: 150 (banda VHF)</span></span>
       </label>
       <input id="cob-f" type="number" value="150" />
     </div>
     <div class="campo">
-      <label>Radio (km)
-        <span class="info" tabindex="0" role="img" aria-label="Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40">i<span class="tip" aria-hidden="true">Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40</span></span>
+      <label><span data-i18n="vhf_campo_radio">Radio (km)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_radio"}' aria-label="Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40">i<span class="tip" data-i18n="vhf_tip_radio" aria-hidden="true">Distancia máxima a calcular desde el transmisor, en km. Más grande = más lento. Ej: 40</span></span>
       </label>
       <input id="cob-radius" type="number" value="40" min="1" max="100" />
     </div>
     <div class="campo">
-      <label>Umbral (dBm)
-        <span class="info" tabindex="0" role="img" aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100">i<span class="tip" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100</span></span>
+      <label><span data-i18n="campo_umbral">Umbral (dBm)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_umbral"}' aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100">i<span class="tip" data-i18n="vhf_tip_umbral" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Más negativo = receptor más sensible = más cobertura. Un VHF típico ronda -100 a -116. Ej: -100</span></span>
       </label>
       <input id="cob-rt" type="number" value="-80" />
     </div>
     <div class="campo">
-      <label>Res (px)
-        <span class="info" tabindex="0" role="img" aria-label="Detalle del cálculo en píxeles. Más alto = más detalle y más lento.">i<span class="tip" aria-hidden="true">Detalle del cálculo en píxeles. Más alto = más detalle y más lento.</span></span>
+      <label><span data-i18n="vhf_campo_res">Res (px)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"vhf_tip_res"}' aria-label="Detalle del cálculo en píxeles. Más alto = más detalle y más lento.">i<span class="tip" data-i18n="vhf_tip_res" aria-hidden="true">Detalle del cálculo en píxeles. Más alto = más detalle y más lento.</span></span>
       </label>
       <input id="cob-res" type="number" value="1200" />
     </div>
-    <button id="btn-calcular" type="button">Calcular cobertura</button>
+    <button id="btn-calcular" type="button" data-i18n="vhf_btn_calcular">Calcular cobertura</button>
     <!-- Se habilita tras un cálculo exitoso; guarda la cobertura con un nombre. -->
-    <button id="btn-guardar" type="button" disabled>Guardar cobertura</button>
+    <button id="btn-guardar" type="button" disabled data-i18n="vhf_btn_guardar">Guardar cobertura</button>
     <!-- Exporta la cobertura actual a un KMZ (Google Earth). Mismo gate que Guardar. -->
-    <button id="btn-exportar-kml" type="button" disabled>Exportar a Google Earth</button>
+    <button id="btn-exportar-kml" type="button" disabled data-i18n="vhf_btn_exportar">Exportar a Google Earth</button>
 
     <!-- Coberturas guardadas: checkbox para prender/apagar (varias a la vez) + borrar. -->
     <div id="guardadas">
-      <h4>Coberturas guardadas</h4>
-      <p id="guardadas-vacio" class="ayuda">Todavía no guardaste ninguna.</p>
+      <h4 data-i18n="vhf_guardadas_titulo">Coberturas guardadas</h4>
+      <p id="guardadas-vacio" class="ayuda" data-i18n="vhf_guardadas_vacio">Todavía no guardaste ninguna.</p>
       <ul id="lista-guardadas"></ul>
     </div>
   </div>
@@ -147,25 +157,25 @@
     VHF. Se muestra sólo en modo HF (toggle del topbar). HF no usa DEM/relieve.
   -->
   <div id="panel-hf">
-    <h3>Cobertura HF</h3>
-    <p class="ayuda">Hacé clic en el mapa para ubicar tu estación.</p>
+    <h3 data-i18n="hf_titulo">Cobertura HF</h3>
+    <p class="ayuda" data-i18n="hf_ayuda">Hacé clic en el mapa para ubicar tu estación.</p>
 
     <div class="campo">
-      <label>Lat
-        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      <label><span data-i18n="campo_lat">Lat</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_latlon"}' aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" data-i18n="tip_latlon" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
       </label>
       <input id="hf-lat" type="number" step="0.00001" readonly />
     </div>
     <div class="campo">
-      <label>Lon
-        <span class="info" tabindex="0" role="img" aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
+      <label><span data-i18n="campo_lon">Lon</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_latlon"}' aria-label="Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01">i<span class="tip" data-i18n="tip_latlon" aria-hidden="true">Ubicación del transmisor en grados decimales (WGS84). Ej: -32.34, -65.01</span></span>
       </label>
       <input id="hf-lon" type="number" step="0.00001" readonly />
     </div>
 
     <div class="campo">
-      <label>Banda
-        <span class="info" tabindex="0" role="img" aria-label="Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.">i<span class="tip" aria-hidden="true">Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.</span></span>
+      <label><span data-i18n="hf_campo_banda">Banda</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_banda"}' aria-label="Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.">i<span class="tip" data-i18n="hf_tip_banda" aria-hidden="true">Banda de HF a analizar. Cada banda se calcula en una frecuencia representativa. Elegí 'Otra' para cargar una frecuencia exacta en MHz.</span></span>
       </label>
       <select id="hf-banda">
         <option value="3.6">80 m (3.6 MHz)</option>
@@ -175,32 +185,32 @@
         <option value="18.1">17 m (18.1 MHz)</option>
         <option value="21.2">15 m (21.2 MHz)</option>
         <option value="28.5">10 m (28.5 MHz)</option>
-        <option value="otra">Otra frecuencia (MHz)…</option>
+        <option value="otra" data-i18n="hf_opcion_otra">Otra frecuencia (MHz)…</option>
       </select>
     </div>
     <div class="campo" id="hf-freq-otra-campo" hidden>
-      <label>Frec (MHz)
-        <span class="info" tabindex="0" role="img" aria-label="Frecuencia exacta en MHz (1.6 a 30).">i<span class="tip" aria-hidden="true">Frecuencia exacta en MHz (1.6 a 30).</span></span>
+      <label><span data-i18n="campo_frec">Frec (MHz)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_frecotra"}' aria-label="Frecuencia exacta en MHz (1.6 a 30).">i<span class="tip" data-i18n="hf_tip_frecotra" aria-hidden="true">Frecuencia exacta en MHz (1.6 a 30).</span></span>
       </label>
       <input id="hf-freq-otra" type="number" step="0.1" min="1.6" max="30" value="7.1" />
     </div>
 
     <div class="campo">
-      <label>Alcance
-        <span class="info" tabindex="0" role="img" aria-label="Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.">i<span class="tip" aria-hidden="true">Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.</span></span>
+      <label><span data-i18n="hf_campo_alcance">Alcance</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_alcance"}' aria-label="Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.">i<span class="tip" data-i18n="hf_tip_alcance" aria-hidden="true">Tamaño del área a analizar, centrada en tu estación. La cobertura HF es de larga distancia; el área NO depende del zoom del mapa.</span></span>
       </label>
       <select id="hf-alcance"></select>
     </div>
 
     <div class="campo">
-      <label>Mes
-        <span class="info" tabindex="0" role="img" aria-label="Mes del año a analizar (la propagación HF cambia mucho por estación).">i<span class="tip" aria-hidden="true">Mes del año a analizar (la propagación HF cambia mucho por estación).</span></span>
+      <label><span data-i18n="hf_campo_mes">Mes</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_mes"}' aria-label="Mes del año a analizar (la propagación HF cambia mucho por estación).">i<span class="tip" data-i18n="hf_tip_mes" aria-hidden="true">Mes del año a analizar (la propagación HF cambia mucho por estación).</span></span>
       </label>
       <select id="hf-mes"></select>
     </div>
     <div class="campo">
-      <label>Hora UTC
-        <span class="info" tabindex="0" role="img" aria-label="Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.">i<span class="tip" aria-hidden="true">Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.</span></span>
+      <label><span data-i18n="hf_campo_hora">Hora UTC</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_hora"}' aria-label="Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.">i<span class="tip" data-i18n="hf_tip_hora" aria-hidden="true">Hora UTC (0 a 23). La propagación HF cambia mucho entre día y noche.</span></span>
       </label>
       <select id="hf-hora"></select>
     </div>
@@ -210,38 +220,38 @@
 
     <!-- Avanzado: el usuario común no lo toca. <details> nativo = colapso sin JS. -->
     <details id="hf-avanzado">
-      <summary>Avanzado</summary>
+      <summary data-i18n="hf_avanzado">Avanzado</summary>
       <div class="campo">
-        <label>SSN
-          <span class="info" tabindex="0" role="img" aria-label="Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.">i<span class="tip" aria-hidden="true">Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.</span></span>
+        <label><span data-i18n="hf_campo_ssn">SSN</span>
+          <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_ssn"}' aria-label="Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.">i<span class="tip" data-i18n="hf_tip_ssn" aria-hidden="true">Número de manchas solares (R12). Si lo dejás vacío, se toma el pronóstico de NOAA para el mes elegido.</span></span>
         </label>
-        <input id="hf-ssn-override" type="number" min="0" max="311" placeholder="auto" />
+        <input id="hf-ssn-override" type="number" min="0" max="311" data-i18n-attrs='{"placeholder":"hf_ssn_placeholder"}' placeholder="auto" />
       </div>
       <div class="campo">
-        <label>Ruido
-          <span class="info" tabindex="0" role="img" aria-label="Ambiente de ruido man-made en el receptor. Rural es un buen default general.">i<span class="tip" aria-hidden="true">Ambiente de ruido man-made en el receptor. Rural es un buen default general.</span></span>
+        <label><span data-i18n="hf_campo_ruido">Ruido</span>
+          <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"hf_tip_ruido"}' aria-label="Ambiente de ruido man-made en el receptor. Rural es un buen default general.">i<span class="tip" data-i18n="hf_tip_ruido" aria-hidden="true">Ambiente de ruido man-made en el receptor. Rural es un buen default general.</span></span>
         </label>
         <select id="hf-ruido">
-          <option value="CITY">Ciudad</option>
-          <option value="RESIDENTIAL">Residencial</option>
-          <option value="RURAL" selected>Rural</option>
-          <option value="QUIETRURAL">Rural silencioso</option>
+          <option value="CITY" data-i18n="hf_ruido_ciudad">Ciudad</option>
+          <option value="RESIDENTIAL" data-i18n="hf_ruido_residencial">Residencial</option>
+          <option value="RURAL" selected data-i18n="hf_ruido_rural">Rural</option>
+          <option value="QUIETRURAL" data-i18n="hf_ruido_rural_silencioso">Rural silencioso</option>
         </select>
       </div>
     </details>
 
-    <button id="hf-calcular" type="button" disabled>Calcular cobertura HF</button>
+    <button id="hf-calcular" type="button" disabled data-i18n="hf_btn_calcular">Calcular cobertura HF</button>
 
     <!-- Leyenda: refleja EXACTAMENTE los cortes de color del backend (_BANDAS_BCR). -->
     <div id="hf-leyenda" class="hf-leyenda" hidden>
-      <h4>Fiabilidad del circuito</h4>
+      <h4 data-i18n="hf_leyenda_titulo">Fiabilidad del circuito</h4>
       <ul>
-        <li><i class="hf-sw" style="background:#1a9850"></i> Fuerte (≥ 90 %)</li>
-        <li><i class="hf-sw" style="background:#a6d96a"></i> Buena (75–90 %)</li>
-        <li><i class="hf-sw" style="background:#fdae61"></i> Marginal (50–75 %)</li>
-        <li><i class="hf-sw" style="background:#d73027"></i> Baja (&lt; 50 %)</li>
+        <li><i class="hf-sw" style="background:#1a9850"></i> <span data-i18n="hf_leyenda_fuerte">Fuerte (≥ 90 %)</span></li>
+        <li><i class="hf-sw" style="background:#a6d96a"></i> <span data-i18n="hf_leyenda_buena">Buena (75–90 %)</span></li>
+        <li><i class="hf-sw" style="background:#fdae61"></i> <span data-i18n="hf_leyenda_marginal">Marginal (50–75 %)</span></li>
+        <li><i class="hf-sw" style="background:#d73027"></i> <span data-i18n="hf_leyenda_baja">Baja (&lt; 50 %)</span></li>
       </ul>
-      <p class="hf-nota">La baja fiabilidad cerca del transmisor en ciertas bandas/horas es normal (zona de silencio), no un error.</p>
+      <p class="hf-nota" data-i18n="hf_leyenda_nota">La baja fiabilidad cerca del transmisor en ciertas bandas/horas es normal (zona de silencio), no un error.</p>
       <p id="hf-ssn-fuente" class="hf-mini"></p>
     </div>
   </div>
@@ -253,8 +263,8 @@
     diferencia de HF), así que "Relieve" y "Descargar zona" quedan visibles.
   -->
   <div id="panel-mejor">
-    <h3>Mejor ubicación</h3>
-    <p class="ayuda">
+    <h3 data-i18n="mejor_titulo">Mejor ubicación</h3>
+    <p class="ayuda" data-i18n="mejor_ayuda">
       Dibujá el perímetro de la zona que querés cubrir: click en el mapa para
       agregar puntos. Con 3 o más puntos, cerrá el área (o directo "Buscar
       mejor ubicación": si no la cerraste, se cierra sola).
@@ -262,42 +272,42 @@
     <p id="mejor-contador" class="ayuda">Puntos dibujados: 0</p>
 
     <div class="mejor-acciones-dibujo">
-      <button id="mejor-cerrar" type="button" disabled>Cerrar área</button>
-      <button id="mejor-reiniciar" type="button" disabled>Reiniciar</button>
+      <button id="mejor-cerrar" type="button" disabled data-i18n="mejor_btn_cerrar">Cerrar área</button>
+      <button id="mejor-reiniciar" type="button" disabled data-i18n="mejor_btn_reiniciar">Reiniciar</button>
     </div>
 
     <div class="campo">
-      <label>Tx h (m)
-        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" aria-hidden="true">Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
+      <label><span data-i18n="mejor_campo_txh">Tx h (m)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"mejor_tip_txh"}' aria-label="Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25">i<span class="tip" data-i18n="mejor_tip_txh" aria-hidden="true">Altura de la antena de la repetidora SOBRE EL SUELO (no sobre el nivel del mar), en metros. Ej: 25</span></span>
       </label>
       <input id="mejor-txh" type="number" value="10" />
     </div>
     <div class="campo">
-      <label>Rx h (m)
-        <span class="info" tabindex="0" role="img" aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
+      <label><span data-i18n="campo_rxh">Rx h (m)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"tip_rxh"}' aria-label="Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5">i<span class="tip" data-i18n="tip_rxh" aria-hidden="true">Altura de la antena receptora sobre el suelo, en metros. Handy ~1,5; móvil ~2. Ej: 1.5</span></span>
       </label>
       <input id="mejor-rxh" type="number" value="2" />
     </div>
     <div class="campo">
-      <label>ERP (W)
-        <span class="info" tabindex="0" role="img" aria-label="Potencia radiada efectiva (ERP) en watts. Ej: 25">i<span class="tip" aria-hidden="true">Potencia radiada efectiva (ERP) en watts. Ej: 25</span></span>
+      <label><span data-i18n="campo_erp">ERP (W)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"mejor_tip_erp"}' aria-label="Potencia radiada efectiva (ERP) en watts. Ej: 25">i<span class="tip" data-i18n="mejor_tip_erp" aria-hidden="true">Potencia radiada efectiva (ERP) en watts. Ej: 25</span></span>
       </label>
       <input id="mejor-erp" type="number" value="25" />
     </div>
     <div class="campo">
-      <label>Frec (MHz)
-        <span class="info" tabindex="0" role="img" aria-label="Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)">i<span class="tip" aria-hidden="true">Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)</span></span>
+      <label><span data-i18n="campo_frec">Frec (MHz)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"mejor_tip_frec"}' aria-label="Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)">i<span class="tip" data-i18n="mejor_tip_frec" aria-hidden="true">Frecuencia de la repetidora en MHz. Ej: 150 (banda VHF)</span></span>
       </label>
       <input id="mejor-f" type="number" value="150" />
     </div>
     <div class="campo">
-      <label>Umbral (dBm)
-        <span class="info" tabindex="0" role="img" aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100">i<span class="tip" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100</span></span>
+      <label><span data-i18n="campo_umbral">Umbral (dBm)</span>
+        <span class="info" tabindex="0" role="img" data-i18n-attrs='{"aria-label":"mejor_tip_umbral"}' aria-label="Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100">i<span class="tip" data-i18n="mejor_tip_umbral" aria-hidden="true">Señal mínima que el receptor necesita para tener cobertura, en dBm. Ej: -100</span></span>
       </label>
       <input id="mejor-rt" type="number" value="-80" />
     </div>
 
-    <button id="mejor-calcular" type="button" disabled>Buscar mejor ubicación</button>
+    <button id="mejor-calcular" type="button" disabled data-i18n="mejor_btn_calcular">Buscar mejor ubicación</button>
 
     <p id="mejor-resultado" class="mejor-resultado" hidden></p>
   </div>
@@ -308,8 +318,8 @@
     ni el panel de cobertura. Se abre con el botón "Offline" del topbar.
   -->
   <div id="panel-offline">
-    <h3>Descargar zona</h3>
-    <p class="ayuda">
+    <h3 data-i18n="off_titulo">Descargar zona</h3>
+    <p class="ayuda" data-i18n="off_ayuda">
       Descargá el relieve de la vista actual o de una provincia para usar el mapa
       y el cálculo sin internet.
     </p>
@@ -319,38 +329,38 @@
       Va arriba y destacada como botón primario para no perder ese flujo rápido.
     -->
     <div class="off-bloque">
-      <button id="off-descargar-vista" type="button" class="off-primario">Descargar la vista actual</button>
+      <button id="off-descargar-vista" type="button" class="off-primario" data-i18n="off_btn_vista">Descargar la vista actual</button>
     </div>
 
     <!-- Descargar provincia (acción secundaria) -->
     <div class="off-bloque">
-      <label class="off-label" for="off-provincia">Provincia</label>
+      <label class="off-label" for="off-provincia" data-i18n="off_label_provincia">Provincia</label>
       <select id="off-provincia"></select>
-      <button id="off-descargar-prov" type="button">Descargar provincia</button>
+      <button id="off-descargar-prov" type="button" data-i18n="off_btn_provincia">Descargar provincia</button>
     </div>
 
     <!-- Barra de progreso (visible solo mientras corre una descarga) -->
     <div id="off-progreso" hidden>
       <div class="off-barra"><div id="off-barra-fill"></div></div>
       <p id="off-progreso-txt" class="off-mini"></p>
-      <button id="off-reintentar" type="button" hidden>Reintentar faltantes</button>
+      <button id="off-reintentar" type="button" hidden data-i18n="off_btn_reintentar">Reintentar faltantes</button>
     </div>
 
     <!-- Visibilidad de la caché -->
     <div id="guardadas" class="off-seccion">
-      <h4>Zonas disponibles offline</h4>
+      <h4 data-i18n="off_zonas_titulo">Zonas disponibles offline</h4>
       <label class="off-check">
         <!-- Tildado por defecto: al abrir el panel se muestran las zonas en el mapa -->
         <input id="off-toggle-cache" type="checkbox" checked />
-        Mostrar en el mapa
+        <span data-i18n="off_check_mostrar">Mostrar en el mapa</span>
       </label>
       <label class="off-check">
         <input id="off-toggle-oceano" type="checkbox" />
-        Incluir océano
+        <span data-i18n="off_check_oceano">Incluir océano</span>
       </label>
       <div id="off-leyenda" class="off-leyenda" hidden>
-        <span><i class="off-sw tierra"></i> Tierra</span>
-        <span><i class="off-sw oceano"></i> Océano</span>
+        <span><i class="off-sw tierra"></i> <span data-i18n="off_leyenda_tierra">Tierra</span></span>
+        <span><i class="off-sw oceano"></i> <span data-i18n="off_leyenda_oceano">Océano</span></span>
       </div>
       <p id="off-resumen" class="off-mini"></p>
     </div>
@@ -374,25 +384,25 @@
   -->
   <div id="modal-apikey" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="apikey-titulo">
-      <h3 id="apikey-titulo">API key de OpenTopography</h3>
-      <p id="apikey-mensaje" class="modal-texto">
+      <h3 id="apikey-titulo" data-i18n="apikey_titulo">API key de OpenTopography</h3>
+      <p id="apikey-mensaje" class="modal-texto" data-i18n="apikey_mensaje_falta">
         No tenés una API key de OpenTopography configurada. Si no tenés una, creala gratis.
       </p>
       <p class="modal-links">
-        <a href="https://portal.opentopography.org/newUser" target="_blank" rel="noopener">Crear cuenta gratis</a>
+        <a href="https://portal.opentopography.org/newUser" target="_blank" rel="noopener" data-i18n="apikey_link_crear">Crear cuenta gratis</a>
         ·
-        <a href="https://github.com/matiasoviedo28/RadioLocal-VHF-HF/blob/main/OpenTopography.md" target="_blank" rel="noopener">Guía paso a paso</a>
+        <a href="https://github.com/matiasoviedo28/RadioLocal-VHF-HF/blob/main/OpenTopography.md" target="_blank" rel="noopener" data-i18n="apikey_link_guia">Guía paso a paso</a>
       </p>
-      <label for="apikey-input">Pegá tu API key</label>
+      <label for="apikey-input" data-i18n="apikey_label_pegar">Pegá tu API key</label>
       <!-- Input enmascarado + botón para mostrar/ocultar la clave. -->
       <div class="apikey-fila">
         <input id="apikey-input" type="password" autocomplete="off" spellcheck="false"
-               placeholder="Tu clave de OpenTopography" />
-        <button id="apikey-ver" type="button" aria-label="Mostrar u ocultar la clave" title="Mostrar/ocultar">👁</button>
+               data-i18n-attrs='{"placeholder":"apikey_placeholder"}' placeholder="Tu clave de OpenTopography" />
+        <button id="apikey-ver" type="button" data-i18n-attrs='{"aria-label":"apikey_ver_aria","title":"apikey_ver_title"}' aria-label="Mostrar u ocultar la clave" title="Mostrar/ocultar">👁</button>
       </div>
       <div class="modal-acciones">
-        <button id="apikey-cancelar" type="button">Cerrar</button>
-        <button id="apikey-ok" type="button">Guardar</button>
+        <button id="apikey-cancelar" type="button" data-i18n="apikey_btn_cerrar">Cerrar</button>
+        <button id="apikey-ok" type="button" data-i18n="apikey_btn_guardar">Guardar</button>
       </div>
     </div>
   </div>
@@ -400,12 +410,12 @@
   <!-- Modal para nombrar la cobertura al guardar (reemplaza al prompt nativo) -->
   <div id="modal-guardar" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
-      <h3 id="modal-titulo">Guardar cobertura</h3>
-      <label for="modal-nombre">Nombre</label>
-      <input id="modal-nombre" type="text" maxlength="80" placeholder="Ej: Repetidora Cerro Otto" />
+      <h3 id="modal-titulo" data-i18n="guardar_titulo">Guardar cobertura</h3>
+      <label for="modal-nombre" data-i18n="guardar_label_nombre">Nombre</label>
+      <input id="modal-nombre" type="text" maxlength="80" data-i18n-attrs='{"placeholder":"guardar_placeholder"}' placeholder="Ej: Repetidora Cerro Otto" />
       <div class="modal-acciones">
-        <button id="modal-cancelar" type="button">Cancelar</button>
-        <button id="modal-ok" type="button">Guardar</button>
+        <button id="modal-cancelar" type="button" data-i18n="guardar_btn_cancelar">Cancelar</button>
+        <button id="modal-ok" type="button" data-i18n="guardar_btn_ok">Guardar</button>
       </div>
     </div>
   </div>
@@ -416,11 +426,11 @@
   -->
   <div id="modal-relieve" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="relieve-titulo">
-      <h3 id="relieve-titulo">Relieve no disponible</h3>
-      <p class="modal-texto">Primero descargá la zona para ver el relieve.</p>
+      <h3 id="relieve-titulo" data-i18n="relieve_modal_titulo">Relieve no disponible</h3>
+      <p class="modal-texto" data-i18n="relieve_modal_texto">Primero descargá la zona para ver el relieve.</p>
       <div class="modal-acciones">
-        <button id="relieve-cerrar" type="button">Cerrar</button>
-        <button id="relieve-descargar" type="button">Descargar zona</button>
+        <button id="relieve-cerrar" type="button" data-i18n="relieve_modal_cerrar">Cerrar</button>
+        <button id="relieve-descargar" type="button" data-i18n="relieve_modal_descargar">Descargar zona</button>
       </div>
     </div>
   </div>
@@ -439,15 +449,16 @@
       <p id="tour-paso" class="tour-paso"></p>
       <p id="tour-texto" class="tour-texto"></p>
       <div id="tour-acciones">
-        <button id="tour-omitir" type="button" class="tour-link">Omitir tutorial</button>
+        <button id="tour-omitir" type="button" class="tour-link" data-i18n="tour_omitir">Omitir tutorial</button>
         <span class="tour-nav">
-          <button id="tour-anterior" type="button">Anterior</button>
-          <button id="tour-siguiente" type="button">Siguiente</button>
+          <button id="tour-anterior" type="button" data-i18n="tour_anterior">Anterior</button>
+          <button id="tour-siguiente" type="button" data-i18n="tour_siguiente">Siguiente</button>
         </span>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -90,14 +90,14 @@ async function mensajeDeError(resp) {
   }
   if (detalle) return `(${resp.status}) ${detalle}`;
   const porCodigo = {
-    409: 'Zona no preparada. Usá "Descargar zona" primero.',
-    413: "Área demasiado grande. Acercá el zoom.",
-    422: "No es posible calcular con esos parámetros.",
-    502: "No se pudo descargar el relieve (problema de red).",
-    503: "Falta configurar la API key de relieve (en la app o en .env).",
-    504: "Tiempo de espera agotado.",
+    409: t("err_409"),
+    413: t("err_413"),
+    422: t("err_422"),
+    502: t("err_502"),
+    503: t("err_503"),
+    504: t("err_504"),
   };
-  return `(${resp.status}) ${porCodigo[resp.status] || resp.statusText || "Error"}`;
+  return `(${resp.status}) ${porCodigo[resp.status] || resp.statusText || t("error_generico")}`;
 }
 
 // Agrega (o reemplaza) un overlay raster a partir de un blob PNG y su bbox.
@@ -148,11 +148,6 @@ let envTieneKey = false; // ¿el .env del servidor ya trae una key?
 // Con la fuente por defecto (S3, Copernicus) es false: el cartel nunca aparece.
 let requiereKey = false;
 
-const MSG_API_FALTA =
-  "No tenés una API key de OpenTopography configurada. Si no tenés una, creala gratis.";
-const MSG_API_INVALIDA =
-  "Tu API key parece inválida, revisala. Pegá una clave válida de OpenTopography.";
-
 function getApiKey() {
   return localStorage.getItem(LS_API_KEY) || "";
 }
@@ -190,13 +185,13 @@ function ocultarModalApiKey() {
 apiKeyOk.addEventListener("click", () => {
   const k = apiKeyInput.value.trim();
   if (!k) {
-    apiKeyMensaje.textContent = "Pegá tu API key antes de guardar.";
+    apiKeyMensaje.textContent = t("apikey_falta_antes_guardar");
     apiKeyMensaje.classList.add("error");
     return;
   }
   setApiKey(k);
   ocultarModalApiKey();
-  setEstado('API key guardada. Probá "Descargar zona".');
+  setEstado(t("apikey_guardada"));
 });
 
 apiKeyCancelar.addEventListener("click", ocultarModalApiKey);
@@ -219,11 +214,11 @@ async function manejarErrorApiKey(resp) {
     /* respuesta no-JSON */
   }
   if (code === "no_api_key") {
-    mostrarModalApiKey(MSG_API_FALTA);
+    mostrarModalApiKey(t("apikey_mensaje_falta"));
     return true;
   }
   if (code === "invalid_api_key") {
-    mostrarModalApiKey(MSG_API_INVALIDA, true);
+    mostrarModalApiKey(t("apikey_mensaje_invalida"), true);
     return true;
   }
   return false;
@@ -245,7 +240,7 @@ async function inicializarApiKey() {
   // El cartel SOLO aplica al fallback OpenTopography (requires_api_key=true) y
   // únicamente si no hay key usable. Con la fuente por defecto (S3) no hace
   // falta key, así que el modal nunca se muestra.
-  if (requiereKey && !hayKeyUsable()) mostrarModalApiKey(MSG_API_FALTA);
+  if (requiereKey && !hayKeyUsable()) mostrarModalApiKey(t("apikey_mensaje_falta"));
 }
 inicializarApiKey();
 
@@ -308,18 +303,18 @@ btnRelieve.addEventListener("click", async () => {
     quitarOverlay(SRC_RELIEVE, LAYER_RELIEVE);
     relieveActivo = false;
     btnRelieve.classList.remove("activo");
-    btnRelieve.title = "Mostrar relieve";
+    btnRelieve.title = t("relieve_mostrar");
     setEstado("");
     return;
   }
 
   // Encender.
-  setOcupado(true, "Generando relieve…");
+  setOcupado(true, t("generando_relieve"));
   try {
     await mostrarRelieve();
     relieveActivo = true;
     btnRelieve.classList.add("activo");
-    btnRelieve.title = "Ocultar relieve";
+    btnRelieve.title = t("relieve_ocultar");
     setEstado("");
   } catch (e) {
     console.error(e);
@@ -328,11 +323,17 @@ btnRelieve.addEventListener("click", async () => {
       setEstado("");
       abrirPopupRelieve();
     } else {
-      setEstado("Relieve: " + e.message, true);
+      setEstado(t("relieve_error_prefijo") + e.message, true);
     }
   } finally {
     setOcupado(false);
   }
+});
+
+// El title del botón "Relieve" depende del estado (Mostrar/Ocultar): se
+// recalcula al cambiar de idioma para no dejarlo en el idioma viejo.
+onCambioIdioma(() => {
+  btnRelieve.title = t(relieveActivo ? "relieve_ocultar" : "relieve_mostrar");
 });
 
 // --------------------------------------------------------------------------
@@ -426,23 +427,16 @@ btnCalcular.addEventListener("click", async () => {
   // Política de radio (modelo síncrono): tope 100 km, aviso entre 60 y 100 km.
   if (body.radius > RADIO_MAX_KM) {
     // Mensaje honesto, no error: los radios grandes llegan con el worker async.
-    setEstado(
-      `Por ahora el máximo es ${RADIO_MAX_KM} km. Los radios mayores llegan con ` +
-        "el procesamiento en segundo plano (próxima versión)."
-    );
+    setEstado(t("radio_max_msg", { max: RADIO_MAX_KM }));
     return;
   }
   if (body.radius > RADIO_AVISO_KM) {
-    if (
-      !confirm(
-        `Radio grande (${body.radius} km): puede tardar un par de minutos. ¿Continuar?`
-      )
-    ) {
+    if (!confirm(t("radio_grande_confirm", { km: body.radius }))) {
       return;
     }
   }
 
-  setOcupado(true, "Calculando cobertura (puede tardar varios segundos)…");
+  setOcupado(true, t("calculando_cobertura"));
   try {
     let resp = await pedirCobertura(body);
 
@@ -453,26 +447,22 @@ btnCalcular.addEventListener("click", async () => {
       if (detalle && detalle.bbox) {
         const nTiles = tilesEnBbox(detalle.bbox);
         if (nTiles > MAX_TILES_PREPARAR) {
-          throw new Error(
-            `La cobertura abarca ${nTiles} tiles (máx. ${MAX_TILES_PREPARAR}). Reducí el radio.`
-          );
+          throw new Error(t("cobertura_area_grande", { n: nTiles, max: MAX_TILES_PREPARAR }));
         }
         const faltan = (detalle.missing || []).length;
         // Aviso con peso si la descarga es grande; si no, confirm simple.
         const gb = (nTiles * 0.054).toFixed(1);
         const msg =
           nTiles > AVISO_TILES_PREPARAR
-            ? `La zona de esta cobertura no está preparada (faltan ${faltan} tile/s).\n\n` +
-              `Vas a descargar ~${nTiles} tiles (~${gb} GB), puede tardar. ¿Continuar?`
-            : `La zona de esta cobertura no está preparada (faltan ${faltan} tile/s).\n\n` +
-              `¿Preparar el área de la cobertura ahora (${nTiles} tile/s, requiere internet)?`;
+            ? t("vhf_zona_no_preparada_grande", { faltan, n: nTiles, gb })
+            : t("vhf_zona_no_preparada_chica", { faltan, n: nTiles });
         if (confirm(msg)) {
-          setEstado(`Preparando el área de la cobertura: ${nTiles} tile(s)…`);
+          setEstado(t("preparando_area", { n: nTiles }));
           await prepararZona(detalle.bbox);
-          setEstado("Calculando cobertura…");
+          setEstado(t("calculando_de_nuevo"));
           resp = await pedirCobertura(body); // reintento una vez
         } else {
-          throw new Error("Zona no preparada.");
+          throw new Error(t("zona_no_preparada_error"));
         }
       }
     }
@@ -487,7 +477,7 @@ btnCalcular.addEventListener("click", async () => {
     setEstado("");
   } catch (e) {
     console.error(e);
-    setEstado("Cobertura: " + e.message, true);
+    setEstado(t("cobertura_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
   }
@@ -571,7 +561,7 @@ btnGuardar.addEventListener("click", async () => {
   const nombre = await pedirNombre();
   if (!nombre) return;
 
-  setOcupado(true, "Guardando cobertura…");
+  setOcupado(true, t("guardando_cobertura"));
   try {
     const resp = await fetch("/api/coverages", {
       method: "POST",
@@ -579,11 +569,11 @@ btnGuardar.addEventListener("click", async () => {
       body: JSON.stringify({ nombre, params: ultimaCobertura }),
     });
     if (!resp.ok) throw new Error(await mensajeDeError(resp));
-    setEstado(`Cobertura "${nombre}" guardada.`);
+    setEstado(t("cobertura_guardada", { nombre }));
     await cargarGuardadas();
   } catch (e) {
     console.error(e);
-    setEstado("Guardar: " + e.message, true);
+    setEstado(t("guardar_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
   }
@@ -628,7 +618,7 @@ btnExportar.addEventListener("click", async () => {
   if (ocupado || !ultimaCobertura) return;
   const nombre = nombreCoberturaActual(ultimaCobertura);
 
-  setOcupado(true, "Exportando a Google Earth…");
+  setOcupado(true, t("exportando"));
   try {
     const resp = await fetch("/api/coverage/export.kmz", {
       method: "POST",
@@ -638,10 +628,10 @@ btnExportar.addEventListener("click", async () => {
     if (!resp.ok) throw new Error(await mensajeDeError(resp));
     const blob = await resp.blob();
     descargarBlob(blob, nombreDeContentDisposition(resp, "cobertura.kmz"));
-    setEstado("KMZ exportado.");
+    setEstado(t("kmz_exportado"));
   } catch (e) {
     console.error(e);
-    setEstado("Exportar: " + e.message, true);
+    setEstado(t("exportar_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
   }
@@ -649,16 +639,16 @@ btnExportar.addEventListener("click", async () => {
 
 // Exporta una cobertura GUARDADA a KMZ (descarga directa por ítem).
 async function exportarGuardada(item) {
-  setOcupado(true, "Exportando a Google Earth…");
+  setOcupado(true, t("exportando"));
   try {
     const resp = await fetch(`/api/coverages/${item.id}/export.kmz`);
     if (!resp.ok) throw new Error(await mensajeDeError(resp));
     const blob = await resp.blob();
     descargarBlob(blob, nombreDeContentDisposition(resp, `${item.nombre}.kmz`));
-    setEstado("KMZ exportado.");
+    setEstado(t("kmz_exportado"));
   } catch (e) {
     console.error(e);
-    setEstado("Exportar: " + e.message, true);
+    setEstado(t("exportar_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
   }
@@ -683,8 +673,8 @@ async function toggleGuardada(item, encender) {
 
 // Borra una cobertura guardada (y su overlay si está encendido).
 async function borrarGuardada(item) {
-  if (!confirm(`¿Borrar la cobertura "${item.nombre}"?`)) return;
-  setOcupado(true, "Borrando…");
+  if (!confirm(t("borrar_confirm", { nombre: item.nombre }))) return;
+  setOcupado(true, t("borrando"));
   try {
     const resp = await fetch(`/api/coverages/${item.id}`, { method: "DELETE" });
     if (!resp.ok && resp.status !== 204) throw new Error(await mensajeDeError(resp));
@@ -693,7 +683,7 @@ async function borrarGuardada(item) {
     await cargarGuardadas();
   } catch (e) {
     console.error(e);
-    setEstado("Borrar: " + e.message, true);
+    setEstado(t("borrar_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
   }
@@ -706,20 +696,20 @@ function renderItem(item) {
   const chk = document.createElement("input");
   chk.type = "checkbox";
   chk.checked = overlaysActivos.has(item.id);
-  chk.title = "Prender/apagar en el mapa";
+  chk.title = t("chk_toggle_title");
   chk.addEventListener("change", async () => {
     try {
       await toggleGuardada(item, chk.checked);
     } catch (e) {
       console.error(e);
-      setEstado("Overlay: " + e.message, true);
+      setEstado(t("overlay_error_prefijo") + e.message, true);
       chk.checked = overlaysActivos.has(item.id); // revertir si falló
     }
   });
 
   const info = document.createElement("div");
   info.className = "cob-info";
-  info.title = "Click para ir a la zona";
+  info.title = t("info_click_title");
   info.innerHTML =
     `<div class="cob-nombre">${item.nombre}</div>` +
     `<div class="cob-params">${resumenParams(item.params)}</div>`;
@@ -732,13 +722,13 @@ function renderItem(item) {
   const exportar = document.createElement("button");
   exportar.className = "cob-exportar";
   exportar.textContent = "🌐";
-  exportar.title = "Exportar a Google Earth (KMZ)";
+  exportar.title = t("exportar_item_title");
   exportar.addEventListener("click", () => exportarGuardada(item));
 
   const del = document.createElement("button");
   del.className = "cob-borrar";
   del.textContent = "🗑";
-  del.title = "Borrar";
+  del.title = t("borrar_item_title");
   del.addEventListener("click", () => borrarGuardada(item));
 
   li.append(chk, info, exportar, del);
@@ -766,7 +756,7 @@ async function cargarGuardadas() {
     }
   } catch (e) {
     console.error(e);
-    setEstado("Guardadas: " + e.message, true);
+    setEstado(t("guardadas_error_prefijo") + e.message, true);
   }
 }
 
@@ -875,10 +865,7 @@ function setProgresoTxt(texto) {
 function confirmarDescargaRegion(nTiles) {
   const gb = (nTiles * GB_POR_TILE).toFixed(1);
   if (nTiles * GB_POR_TILE > UMBRAL_GB_AVISO) {
-    return confirm(
-      `Vas a descargar ~${nTiles} tiles (~${gb} GB). Es una descarga grande ` +
-        "(escala país). ¿Continuar?"
-    );
+    return confirm(t("off_descarga_grande_confirm", { n: nTiles, gb }));
   }
   return true; // provincias normales: no molestamos
 }
@@ -908,7 +895,7 @@ async function iniciarDescarga(payload, bboxSONE) {
   if (!confirmarDescargaRegion(nTiles)) return;
 
   const gb = (nTiles * GB_POR_TILE).toFixed(1);
-  setProgresoTxt(`Iniciando descarga (~${nTiles} tiles, ~${gb} GB)…`);
+  setProgresoTxt(t("off_iniciando_descarga", { n: nTiles, gb }));
   mostrarReintentar(false);
 
   try {
@@ -918,19 +905,19 @@ async function iniciarDescarga(payload, bboxSONE) {
       body: JSON.stringify(payload),
     });
     if (resp.status === 409) {
-      setProgresoTxt("Ya hay una descarga en curso. Esperá a que termine.");
+      setProgresoTxt(t("off_descarga_en_curso"));
       arrancarPoll();
       return;
     }
     if (!resp.ok) {
-      setProgresoTxt("No se pudo iniciar: " + (await mensajeDeError(resp)));
+      setProgresoTxt(t("off_descarga_no_iniciada", { motivo: await mensajeDeError(resp) }));
       return;
     }
     ultimaDescarga = { payload, bboxSONE };
     arrancarPoll();
   } catch (e) {
     console.error(e);
-    setProgresoTxt("No se pudo iniciar la descarga (red).");
+    setProgresoTxt(t("off_descarga_red_error"));
   }
 }
 
@@ -979,9 +966,9 @@ function renderProgreso(st) {
   offProgreso.hidden = false;
   const pct = st.total > 0 ? Math.round((100 * st.done) / st.total) : 0;
   offBarraFill.style.width = `${pct}%`;
-  const partes = [`${st.done}/${st.total} tiles`];
-  if (st.ocean) partes.push(`océano ${st.ocean}`);
-  if (st.failed) partes.push(`fallidos ${st.failed}`);
+  const partes = [t("off_progreso_tiles", { done: st.done, total: st.total })];
+  if (st.ocean) partes.push(t("off_progreso_oceano", { n: st.ocean }));
+  if (st.failed) partes.push(t("off_progreso_fallidos", { n: st.failed }));
   let txt = partes.join(" · ");
   if (st.state === "running" && st.current) txt += ` · ${st.current}`;
   if (st.message && st.state !== "running") txt = st.message + ` (${partes.join(" · ")})`;
@@ -1079,7 +1066,7 @@ async function actualizarCache(refrescarOverlay = false) {
     const data = await resp.json();
     cacheTiles = data.tiles || [];
     const r = data.resumen || { tiles: 0, tamano_total_mb: 0 };
-    offResumen.textContent = `${r.tiles} tiles en caché · ${r.tamano_total_mb} MB en disco`;
+    offResumen.textContent = t("off_resumen", { tiles: r.tiles, mb: r.tamano_total_mb });
     // Si el toggle está tildado (lo está por defecto), pintamos y mostramos la leyenda.
     if (refrescarOverlay && chkCache.checked) {
       pintarCache();
@@ -1171,46 +1158,17 @@ modalRelieve.addEventListener("click", (e) => {
 const TOUR_FLAG = "radiolocal_tour_visto";
 
 // Cada paso: selector(es) del elemento a resaltar (null = cartel centrado, sin
-// spotlight) y el texto. Para resaltar un área compuesta se pasa un array de
-// selectores y se usa la unión de sus rectángulos.
+// spotlight) y la CLAVE de traducción del texto (ver i18n.js: tour_paso_0..6).
+// Para resaltar un área compuesta se pasa un array de selectores y se usa la
+// unión de sus rectángulos.
 const TOUR_PASOS = [
-  {
-    sel: null,
-    texto:
-      "Bienvenido a RadioLocal-VHF-HF. En 4 pasos planificás una cobertura de " +
-      "radio. Podés omitir esta guía cuando quieras.",
-  },
-  {
-    sel: "#btn-offline",
-    texto:
-      "1) Descargá tu zona. Bajá el terreno del área donde vas a trabajar; una " +
-      "vez descargada, funciona incluso sin internet.",
-  },
-  {
-    sel: "#panel-cobertura",
-    texto:
-      "2) Ubicá tu estación. Hacé clic en el mapa donde está tu antena y " +
-      "completá los datos de tu equipo. Las 'i' te explican cada dato.",
-  },
-  {
-    sel: "#btn-calcular",
-    texto:
-      "3) Calculá la cobertura. El mapa te muestra hasta dónde llega tu señal.",
-  },
-  {
-    sel: "#btn-relieve",
-    texto: "4) Mirá el relieve. Activalo para ver el terreno del área.",
-  },
-  {
-    sel: ["#btn-guardar", "#guardadas"],
-    texto:
-      "Guardá y compará. Podés guardar coberturas y superponerlas para " +
-      "compararlas.",
-  },
-  {
-    sel: null,
-    texto: "¡Listo! Reabrí esta guía cuando quieras con el botón ?.",
-  },
+  { sel: null, clave: "tour_paso_0" },
+  { sel: ["#btn-offline", "#idioma-selector"], clave: "tour_paso_1" },
+  { sel: "#panel-cobertura", clave: "tour_paso_2" },
+  { sel: "#btn-calcular", clave: "tour_paso_3" },
+  { sel: "#btn-relieve", clave: "tour_paso_4" },
+  { sel: ["#btn-guardar", "#guardadas"], clave: "tour_paso_5" },
+  { sel: null, clave: "tour_paso_6" },
 ];
 
 const tourOverlay = document.getElementById("tour-overlay");
@@ -1248,13 +1206,14 @@ function tourRectDe(sel) {
 // Pinta el paso actual: posiciona el spotlight y el cartel, y ajusta botones.
 function tourRender() {
   const paso = TOUR_PASOS[tourIndice];
-  tourPaso.textContent = `Paso ${tourIndice + 1} de ${TOUR_PASOS.length}`;
-  tourTexto.textContent = paso.texto;
+  tourPaso.textContent = t("tour_paso_contador", { n: tourIndice + 1, total: TOUR_PASOS.length });
+  tourTexto.textContent = t(paso.clave);
 
   // Navegación: "Anterior" oculto en el primero; "Siguiente"→"Finalizar" al final.
   tourAnterior.style.visibility = tourIndice === 0 ? "hidden" : "visible";
-  tourSiguiente.textContent =
-    tourIndice === TOUR_PASOS.length - 1 ? "Finalizar" : "Siguiente";
+  tourSiguiente.textContent = t(
+    tourIndice === TOUR_PASOS.length - 1 ? "tour_finalizar" : "tour_siguiente"
+  );
 
   const rect = paso.sel ? tourRectDe(paso.sel) : null;
 
@@ -1325,6 +1284,10 @@ btnAyuda.addEventListener("click", () => tourAbrir(0));
 window.addEventListener("resize", () => {
   if (!tourOverlay.hidden) tourRender();
 });
+// Re-renderiza el paso actual si cambia el idioma mientras el tour está abierto.
+onCambioIdioma(() => {
+  if (!tourOverlay.hidden) tourRender();
+});
 
 // Primera visita: arrancamos el tour automáticamente.
 if (!localStorage.getItem(TOUR_FLAG)) {
@@ -1364,48 +1327,64 @@ const hfCalcular = document.getElementById("hf-calcular");
 const hfLeyenda = document.getElementById("hf-leyenda");
 const hfSsnFuente = document.getElementById("hf-ssn-fuente");
 
-const MESES_ES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+// Meses y alcances HF: claves de traducción, no texto fijo (ver i18n.js).
+const MESES_CLAVES = [
+  "mes_1", "mes_2", "mes_3", "mes_4", "mes_5", "mes_6",
+  "mes_7", "mes_8", "mes_9", "mes_10", "mes_11", "mes_12",
 ];
 
 // Alcances HF (radio en km, área CENTRADA en el Tx). Único lugar de la UI donde se
 // definen; deben coincidir con los presets de config.py del backend. El área NO
 // depende del zoom del mapa (HF es de larga distancia).
 const ALCANCES_HF = [
-  { km: 2000, label: "Regional (~2000 km)" },
-  { km: 4000, label: "Continental (~4000 km)" }, // default
-  { km: 7000, label: "DX / Largo (~7000 km)" },
+  { km: 2000, clave: "hf_alcance_regional" },
+  { km: 4000, clave: "hf_alcance_continental" }, // default
+  { km: 7000, clave: "hf_alcance_dx" },
 ];
 const ALCANCE_DEFAULT_KM = 4000;
 
-// Poblar los selects de mes (1-12) y hora (0-23), con default = UTC actual.
-(function poblarSelectsHF() {
+// Poblar los selects de mes (1-12), hora (0-23) y alcance, con default = UTC
+// actual. Re-invocable: al cambiar de idioma se vuelve a llamar (ver
+// onCambioIdioma más abajo), preservando la opción ya elegida por `value`
+// (estable entre idiomas: son números, solo cambia el texto visible).
+function poblarSelectsHF() {
+  const mesPrevio = hfMes.value;
+  const horaPrevia = hfHora.value;
+  const alcancePrevio = hfAlcance.value;
+
   const ahora = new Date();
   const mesUTC = ahora.getUTCMonth() + 1; // 1-12
   const horaUTC = ahora.getUTCHours(); // 0-23
-  MESES_ES.forEach((nombre, i) => {
+
+  hfMes.innerHTML = "";
+  MESES_CLAVES.forEach((clave, i) => {
     const op = document.createElement("option");
     op.value = String(i + 1);
-    op.textContent = nombre.charAt(0).toUpperCase() + nombre.slice(1);
-    if (i + 1 === mesUTC) op.selected = true;
+    op.textContent = t(clave).charAt(0).toUpperCase() + t(clave).slice(1);
     hfMes.appendChild(op);
   });
+  hfMes.value = mesPrevio || String(mesUTC);
+
+  hfHora.innerHTML = "";
   for (let h = 0; h < 24; h++) {
     const op = document.createElement("option");
     op.value = String(h);
     op.textContent = `${String(h).padStart(2, "0")}:00`;
-    if (h === horaUTC) op.selected = true;
     hfHora.appendChild(op);
   }
-  ALCANCES_HF.forEach(({ km, label }) => {
+  hfHora.value = horaPrevia || String(horaUTC);
+
+  hfAlcance.innerHTML = "";
+  ALCANCES_HF.forEach(({ km, clave }) => {
     const op = document.createElement("option");
     op.value = String(km);
-    op.textContent = label;
-    if (km === ALCANCE_DEFAULT_KM) op.selected = true;
+    op.textContent = t(clave);
     hfAlcance.appendChild(op);
   });
-})();
+  hfAlcance.value = alcancePrevio || String(ALCANCE_DEFAULT_KM);
+}
+poblarSelectsHF();
+onCambioIdioma(poblarSelectsHF);
 
 // Frecuencia (MHz) elegida: de la banda o del campo libre "Otra".
 function hfFrecuencia() {
@@ -1447,25 +1426,30 @@ function fijarTxHF(lat, lon) {
 async function cargarSSN() {
   const year = new Date().getUTCFullYear();
   const month = parseInt(hfMes.value, 10);
-  hfSsnTxt.textContent = "SSN …";
+  hfSsnTxt.textContent = t("hf_ssn_cargando");
   try {
     const resp = await fetch(`/api/hf/ssn?year=${year}&month=${month}`);
     if (!resp.ok) throw new Error("no");
     const d = await resp.json();
-    hfSsnTxt.textContent = `SSN ${d.value} · ${etiquetaFuenteSSN(d.source)}`;
+    hfSsnTxt.textContent = `${t("hf_ssn_prefijo")} ${d.value} · ${etiquetaFuenteSSN(d.source)}`;
   } catch {
-    hfSsnTxt.textContent = "SSN — · sin datos";
+    hfSsnTxt.textContent = t("hf_ssn_sin_datos");
   }
 }
 
 // Traduce la procedencia del SSN a un texto para el usuario.
 function etiquetaFuenteSSN(source) {
-  if (source === "noaa" || source === "cache") return "pronóstico NOAA";
-  if (source === "manual") return "valor manual";
-  return "valor por defecto (sin conexión)";
+  if (source === "noaa" || source === "cache") return t("hf_fuente_noaa");
+  if (source === "manual") return t("hf_fuente_manual");
+  return t("hf_fuente_default");
 }
 
 hfMes.addEventListener("change", cargarSSN);
+// Si el modo HF está activo cuando cambia el idioma, refrescar el SSN mostrado
+// (evita dejar "pronóstico NOAA"/etc. en el idioma viejo).
+onCambioIdioma(() => {
+  if (modoActual === "hf") cargarSSN();
+});
 
 // --- Toggle de modo VHF | HF | Mejor ubicación ---
 function setModo(modo) {
@@ -1500,7 +1484,7 @@ function setModo(modo) {
       quitarOverlay(SRC_RELIEVE, LAYER_RELIEVE);
       relieveActivo = false;
       btnRelieve.classList.remove("activo");
-      btnRelieve.title = "Mostrar relieve";
+      btnRelieve.title = t("relieve_mostrar");
     }
     btnRelieve.hidden = true;
     btnOfflineTop.hidden = true;
@@ -1536,7 +1520,7 @@ hfCalcular.addEventListener("click", async () => {
 
   const freq = hfFrecuencia();
   if (!freq || freq <= 0) {
-    setEstado("Ingresá una frecuencia válida.", true);
+    setEstado(t("hf_frecuencia_invalida"), true);
     return;
   }
 
@@ -1555,7 +1539,7 @@ hfCalcular.addEventListener("click", async () => {
   const override = hfSsnOverride.value.trim();
   if (override !== "") body.ssn = parseInt(override, 10);
 
-  setOcupado(true, "Calculando cobertura HF…");
+  setOcupado(true, t("hf_calculando"));
   hfCalcular.disabled = true;
   try {
     const resp = await fetch("/api/hf/coverage", {
@@ -1585,13 +1569,13 @@ hfCalcular.addEventListener("click", async () => {
     const ssnVal = resp.headers.get("X-SSN");
     const ssnSrc = resp.headers.get("X-SSN-Source") || "";
     if (ssnVal) {
-      hfSsnFuente.textContent = `SSN usado: ${ssnVal} · ${etiquetaFuenteSSN(ssnSrc)}`;
+      hfSsnFuente.textContent = t("hf_ssn_usado", { val: ssnVal, fuente: etiquetaFuenteSSN(ssnSrc) });
     }
     hfLeyenda.hidden = false;
     setEstado("");
   } catch (err) {
     console.error(err);
-    setEstado("Cobertura HF: " + err.message, true);
+    setEstado(t("hf_error_prefijo") + err.message, true);
   } finally {
     setOcupado(false);
     actualizarControlesHF();
@@ -1719,11 +1703,16 @@ function quitarMarcadorMejor() {
 
 // --- Estado de los controles del panel --------------------------------------
 function actualizarControlesMejor() {
-  mejorContador.textContent = `Puntos dibujados: ${puntosPoligono.length}`;
+  mejorContador.textContent = t("mejor_contador", { n: puntosPoligono.length });
   mejorCerrar.disabled = ocupado || poligonoCerrado || puntosPoligono.length < 3;
   mejorReiniciar.disabled = ocupado || puntosPoligono.length === 0;
   mejorCalcular.disabled = ocupado || puntosPoligono.length < 3;
 }
+// El contador de puntos es visible mientras el panel está abierto: refrescarlo
+// al cambiar de idioma evita dejarlo en el idioma viejo.
+onCambioIdioma(() => {
+  if (modoActual === "mejor") actualizarControlesMejor();
+});
 
 // --- Agregar/cerrar/reiniciar el perímetro -----------------------------------
 function agregarPuntoPoligono(lat, lon) {
@@ -1805,7 +1794,7 @@ mejorCalcular.addEventListener("click", async () => {
   // 3+ puntos para calcular (no hace falta que haya clickeado el primer punto).
   if (!poligonoCerrado) cerrarPoligono();
   if (puntosPoligono.length < 3) {
-    setEstado("Dibujá al menos 3 puntos para definir el área.", true);
+    setEstado(t("mejor_puntos_insuficientes"), true);
     return;
   }
 
@@ -1818,7 +1807,7 @@ mejorCalcular.addEventListener("click", async () => {
     rt: parseFloat(document.getElementById("mejor-rt").value),
   };
 
-  setOcupado(true, "Buscando el mejor punto (corre varias cobertura de prueba, puede tardar)…");
+  setOcupado(true, t("mejor_buscando"));
   try {
     let resp = await pedirMejorUbicacion(body);
 
@@ -1829,25 +1818,21 @@ mejorCalcular.addEventListener("click", async () => {
       if (detalle && detalle.bbox) {
         const nTiles = tilesEnBbox(detalle.bbox);
         if (nTiles > MAX_TILES_PREPARAR) {
-          throw new Error(
-            `El área de búsqueda abarca ${nTiles} tiles (máx. ${MAX_TILES_PREPARAR}). Dibujá un perímetro más chico.`
-          );
+          throw new Error(t("mejor_area_grande", { n: nTiles, max: MAX_TILES_PREPARAR }));
         }
         const faltan = (detalle.missing || []).length;
         const gb = (nTiles * 0.054).toFixed(1);
         const msg =
           nTiles > AVISO_TILES_PREPARAR
-            ? `La zona de esta búsqueda no está preparada (faltan ${faltan} tile/s).\n\n` +
-              `Vas a descargar ~${nTiles} tiles (~${gb} GB), puede tardar. ¿Continuar?`
-            : `La zona de esta búsqueda no está preparada (faltan ${faltan} tile/s).\n\n` +
-              `¿Preparar el área ahora (${nTiles} tile/s, requiere internet)?`;
+            ? t("mejor_zona_no_preparada_grande", { faltan, n: nTiles, gb })
+            : t("mejor_zona_no_preparada_chica", { faltan, n: nTiles });
         if (confirm(msg)) {
-          setEstado(`Preparando el área de búsqueda: ${nTiles} tile(s)…`);
+          setEstado(t("mejor_preparando", { n: nTiles }));
           await prepararZona(detalle.bbox);
-          setEstado("Buscando el mejor punto…");
+          setEstado(t("mejor_buscando_de_nuevo"));
           resp = await pedirMejorUbicacion(body); // reintento una vez
         } else {
-          throw new Error("Zona no preparada.");
+          throw new Error(t("zona_no_preparada_error"));
         }
       }
     }
@@ -1863,8 +1848,11 @@ mejorCalcular.addEventListener("click", async () => {
     const score = resp.headers.get("X-Best-Score");
     colocarMarcadorMejor(lat, lon);
 
-    mejorResultadoTxt.textContent =
-      `Mejor punto: ${lat.toFixed(5)}, ${lon.toFixed(5)} · cubre ~${score}% del área dibujada.`;
+    mejorResultadoTxt.textContent = t("mejor_resultado", {
+      lat: lat.toFixed(5),
+      lon: lon.toFixed(5),
+      score,
+    });
     mejorResultadoTxt.hidden = false;
 
     // Encuadre automático sobre el área calculada (mismo criterio que HF).
@@ -1872,7 +1860,7 @@ mejorCalcular.addEventListener("click", async () => {
     setEstado("");
   } catch (e) {
     console.error(e);
-    setEstado("Mejor ubicación: " + e.message, true);
+    setEstado(t("mejor_error_prefijo") + e.message, true);
   } finally {
     setOcupado(false);
     actualizarControlesMejor();
