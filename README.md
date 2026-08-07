@@ -18,6 +18,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Tutorial en YouTube](https://img.shields.io/badge/YouTube-Tutorial-FF0000?logo=youtube&logoColor=white)](https://youtu.be/LfRk-zBDxqQ)
 
+
+## Video completo sobre el proyecto.
+
+> 📺 **Entrevista en Lima Whisky** VIDEO EN YOUTUBE: https://youtu.be/QQFW0WKfolc?t=2595
+
 Herramienta para **planificar la cobertura de radio VHF y HF**, corriendo en tu
 propia máquina, con una interfaz simple e intuitiva. Pensada tanto para **servicios
 de emergencia** como para **radioaficionados de todo el mundo**.
